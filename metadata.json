@@ -1,0 +1,6 @@
+{
+  "name": "System Design Handbook & Interactive Case Studies",
+  "description": "Comprehensive tutorial website for system design fundamentals, building blocks, and 28+ real-world interactive architectural case studies with flow visualizers and capacity estimators.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

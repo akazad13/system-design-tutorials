@@ -10,9 +10,10 @@ import {
   CheckCircle2, 
   Bookmark, 
   Search, 
-  Filter,
+  X,
   Check,
-  Award
+  Award,
+  Sparkles
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -24,6 +25,8 @@ interface SidebarProps {
   onCloseMobile: () => void;
   bookmarks?: string[];
   completed?: string[];
+  isSavedOnlyActive?: boolean;
+  onToggleSavedOnly?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -34,13 +37,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpenMobile,
   onCloseMobile,
   bookmarks = [],
-  completed = []
+  completed = [],
+  isSavedOnlyActive = false,
+  onToggleSavedOnly
 }) => {
   const [fundamentalsExpanded, setFundamentalsExpanded] = useState(true);
   const [caseStudiesExpanded, setCaseStudiesExpanded] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('All Categories');
   const [filterText, setFilterText] = useState('');
-  const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
+  const [localBookmarksOnly, setLocalBookmarksOnly] = useState(false);
+
+  // Sync with external or internal bookmark filter
+  const showBookmarksOnly = isSavedOnlyActive || localBookmarksOnly;
 
   const totalCurriculum = FUNDAMENTAL_TOPICS.length + ALL_CASE_STUDIES.length;
   const completedCount = completed.length;
@@ -79,68 +87,86 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case 'Beginner': return 'bg-emerald-500';
       case 'Intermediate': return 'bg-amber-500';
       case 'Advanced': return 'bg-rose-500';
-      default: return 'bg-zinc-400';
+      default: return 'bg-neutral-400';
+    }
+  };
+
+  const handleToggleBookmarkFilter = () => {
+    if (onToggleSavedOnly) {
+      onToggleSavedOnly();
+    } else {
+      setLocalBookmarksOnly(!localBookmarksOnly);
     }
   };
 
   const content = (
-    <aside className="w-80 h-full flex flex-col bg-[#F9F7F2] border-r border-[#1A1A1A]/10 text-[#1A1A1A] select-none font-sans">
-      {/* Sidebar Quick Action: Interview Cheat Framework */}
-      <div className="p-4 border-b border-[#1A1A1A]/10 bg-[#FDFCFB]">
+    <aside className="w-80 h-full flex flex-col bg-neutral-50/70 dark:bg-[#0D0F17] border-r border-neutral-200/80 dark:border-neutral-800 text-neutral-800 dark:text-neutral-200 select-none font-sans transition-colors duration-200">
+      {/* Sidebar Header: Interview Cheat Framework & Progress */}
+      <div className="p-3.5 border-b border-neutral-200/80 dark:border-neutral-800 bg-white/70 dark:bg-[#111420]/70">
         <button
           onClick={onOpenFramework}
-          className="w-full p-3.5 bg-[#1A1A1A] hover:bg-[#2E2E2E] text-[#FDFCFB] flex items-center justify-between transition-all group shadow-xs"
+          className="w-full p-3 bg-gradient-to-br from-neutral-900 to-neutral-800 hover:from-neutral-800 hover:to-neutral-700 dark:from-indigo-950/80 dark:to-neutral-900 dark:hover:from-indigo-900/80 text-white rounded-xl flex items-center justify-between transition-all group shadow-sm border border-neutral-800 dark:border-indigo-900/50 cursor-pointer"
         >
           <div className="flex items-center gap-2.5">
-            <Compass className="w-4 h-4 text-[#FDFCFB]/80 group-hover:rotate-45 transition-transform duration-300" />
+            <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+              <Compass className="w-4 h-4 text-indigo-300 group-hover:rotate-45 transition-transform duration-300" />
+            </div>
             <div className="text-left">
-              <span className="text-xs font-bold font-sans tracking-wide block uppercase text-[11px]">Interview Blueprint</span>
-              <span className="text-[10px] text-[#FDFCFB]/60 block font-mono">4-Step Strategy & Math Cheats</span>
+              <span className="text-xs font-bold tracking-wide block font-sans">Interview Blueprint</span>
+              <span className="text-[10px] text-neutral-400 block font-mono">4 Steps & Latency Numbers</span>
             </div>
           </div>
-          <span className="px-1.5 py-0.5 border border-[#FDFCFB]/20 text-[#FDFCFB]/90 text-[9px] font-mono tracking-wider uppercase">
+          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium tracking-wider bg-white/10 text-neutral-200">
             Guide
           </span>
         </button>
 
         {/* Curriculum Progress Tracker */}
-        <div className="mt-3 pt-3 border-t border-[#1A1A1A]/10 space-y-1.5">
-          <div className="flex items-center justify-between text-[10px] font-mono">
-            <span className="text-[#1A1A1A]/60 flex items-center gap-1">
-              <Award className="w-3 h-3 text-[#166534]" /> Curriculum Progress:
+        <div className="mt-3 pt-2.5 border-t border-neutral-200/60 dark:border-neutral-800/80 space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-mono">
+            <span className="text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
+              <Award className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Curriculum Completed:
             </span>
-            <span className="font-bold text-[#1A1A1A]">
+            <span className="font-bold text-neutral-900 dark:text-white">
               {completedCount} / {totalCurriculum} ({progressPercent}%)
             </span>
           </div>
-          <div className="w-full h-1.5 bg-[#E5E2D9] overflow-hidden">
+          <div className="w-full h-1.5 bg-neutral-200/80 dark:bg-neutral-800 rounded-full overflow-hidden">
             <div 
-              className="h-full bg-[#166534] transition-all duration-500 ease-out"
+              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500 ease-out"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
         </div>
       </div>
 
-      {/* Sidebar Filter & Category Select */}
-      <div className="p-4 border-b border-[#1A1A1A]/10 space-y-2 bg-[#F9F7F2]">
+      {/* Sidebar Filter & Category Selection */}
+      <div className="p-3 border-b border-neutral-200/80 dark:border-neutral-800 space-y-2 bg-neutral-50/50 dark:bg-[#0D0F17]/50">
         <div className="relative">
-          <Search className="w-3.5 h-3.5 text-[#1A1A1A]/40 absolute left-2.5 top-2.5" />
+          <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-2.5" />
           <input
             type="text"
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
-            placeholder="Search 10 modules & 28 studies..."
-            className="w-full bg-[#FFFFFF] border border-[#1A1A1A]/10 rounded-none pl-8 pr-3 py-1.5 text-xs text-[#1A1A1A] placeholder-[#1A1A1A]/40 focus:outline-none focus:border-[#1A1A1A] font-sans"
+            placeholder="Filter 10 modules & 28 studies..."
+            className="w-full bg-white dark:bg-[#131722] border border-neutral-200 dark:border-neutral-800 rounded-lg pl-8 pr-7 py-1.5 text-xs text-neutral-800 dark:text-neutral-200 placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400 font-sans transition-all"
           />
+          {filterText && (
+            <button
+              onClick={() => setFilterText('')}
+              className="absolute right-2 top-2 p-0.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-white rounded"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Category Dropdown Filter */}
-        <div className="flex items-center gap-1 text-[11px] font-mono">
+        <div className="flex items-center gap-1">
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full bg-[#FFFFFF] border border-[#1A1A1A]/10 rounded-none py-1.5 px-2 text-xs text-[#1A1A1A] focus:outline-none focus:border-[#1A1A1A] font-mono uppercase text-[10px] tracking-wider"
+            className="w-full bg-white dark:bg-[#131722] border border-neutral-200 dark:border-neutral-800 rounded-lg py-1.5 px-2.5 text-xs text-neutral-700 dark:text-neutral-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400 font-sans"
           >
             {CASE_STUDY_CATEGORIES.map((cat) => (
               <option key={cat} value={cat}>
@@ -152,42 +178,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Bookmarks Toggle Pill */}
         {bookmarks.length > 0 && (
-          <div className="pt-1">
+          <div>
             <button
-              onClick={() => setShowBookmarksOnly(!showBookmarksOnly)}
-              className={`w-full px-2 py-1 text-[10px] font-mono uppercase tracking-wider flex items-center justify-between border transition-colors ${
+              onClick={handleToggleBookmarkFilter}
+              className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-sans flex items-center justify-between border transition-all ${
                 showBookmarksOnly
-                  ? 'bg-[#1A1A1A] text-[#FDFCFB] border-[#1A1A1A]'
-                  : 'bg-[#FFFFFF] text-[#1A1A1A]/70 border-[#1A1A1A]/10 hover:border-[#1A1A1A]/30'
+                  ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                  : 'bg-white dark:bg-[#131722] text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-800 hover:border-amber-400'
               }`}
             >
               <div className="flex items-center gap-1.5">
-                <Bookmark className="w-3 h-3" />
-                <span>Saved Topics Only</span>
+                <Bookmark className={`w-3.5 h-3.5 ${showBookmarksOnly ? 'fill-white' : 'fill-amber-500 text-amber-500'}`} />
+                <span className="font-medium">Saved Bookmarks Only</span>
               </div>
-              <span className="font-bold">({bookmarks.length})</span>
+              <span className="font-mono text-[11px] font-bold">({bookmarks.length})</span>
             </button>
           </div>
         )}
       </div>
 
       {/* Scrollable Topic Tree */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3 space-y-4">
         {/* Section 1: Fundamentals */}
-        <div className="space-y-2">
+        <div className="space-y-1">
           <button
             onClick={() => setFundamentalsExpanded(!fundamentalsExpanded)}
-            className="w-full flex items-center justify-between py-1 text-[10px] font-bold uppercase tracking-[0.25em] text-[#1A1A1A]/60 hover:text-[#1A1A1A] font-sans"
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-200/40 dark:hover:bg-neutral-800/40 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <Layers className="w-3.5 h-3.5 text-[#3E5C76]" />
+              <Layers className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
               <span>01 / Fundamentals ({filteredFundamentals.length})</span>
             </div>
             {fundamentalsExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
 
           {fundamentalsExpanded && (
-            <div className="space-y-1 pl-2 border-l border-[#1A1A1A]/10">
+            <div className="space-y-0.5 pt-0.5">
               {filteredFundamentals.map((topic, index) => {
                 const isActive = activeType === 'fundamental' && activeId === topic.id;
                 const isItemCompleted = completed.includes(topic.id);
@@ -200,30 +226,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onSelect('fundamental', topic.id);
                       onCloseMobile();
                     }}
-                    className={`w-full text-left px-2.5 py-1.5 text-xs flex items-center justify-between transition-colors group ${
+                    className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-all group ${
                       isActive
-                        ? 'bg-[#1A1A1A] text-[#FDFCFB] font-semibold'
-                        : 'text-[#1A1A1A]/80 hover:text-[#1A1A1A] hover:bg-[#FFFFFF]'
+                        ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-900 dark:text-indigo-200 font-semibold shadow-2xs border-l-3 border-indigo-600 dark:border-indigo-400'
+                        : 'text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100/80 dark:hover:bg-neutral-800/50'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       {isItemCompleted ? (
-                        <Check className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                       ) : (
-                        <span className={`font-mono text-[9px] ${isActive ? 'text-[#FDFCFB]/60' : 'text-[#1A1A1A]/40'}`}>
+                        <span className={`font-mono text-[10px] w-4 text-center ${isActive ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-neutral-400'}`}>
                           {String(index + 1).padStart(2, '0')}
                         </span>
                       )}
-                      <span className={`truncate font-serif ${isActive ? 'italic' : ''}`}>
+                      <span className="truncate font-sans">
                         {topic.title.replace('System Design: ', '')}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
+                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-1.5">
                       {isItemBookmarked && (
-                        <Bookmark className={`w-3 h-3 ${isActive ? 'text-[#FDFCFB]/80' : 'text-[#92400E]'}`} />
+                        <Bookmark className="w-3 h-3 fill-amber-500 text-amber-500" />
                       )}
-                      <span className={`text-[9px] font-mono ${isActive ? 'text-[#FDFCFB]/60' : 'text-[#1A1A1A]/40'}`}>
+                      <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${
+                        isActive ? 'bg-indigo-100/70 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300' : 'text-neutral-400'
+                      }`}>
                         {topic.readTime.replace(' min read', 'm')}
                       </span>
                     </div>
@@ -235,21 +263,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Section 2: Case Studies */}
-        <div className="space-y-2">
+        <div className="space-y-1">
           <button
             onClick={() => setCaseStudiesExpanded(!caseStudiesExpanded)}
-            className="w-full flex items-center justify-between py-1 text-[10px] font-bold uppercase tracking-[0.25em] text-[#1A1A1A]/60 hover:text-[#1A1A1A] font-sans"
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-200/40 dark:hover:bg-neutral-800/40 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <BookOpen className="w-3.5 h-3.5 text-[#3E5C76]" />
+              <BookOpen className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" />
               <span>02 / Case Archive ({filteredCaseStudies.length})</span>
             </div>
             {caseStudiesExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
 
           {caseStudiesExpanded && (
-            <div className="space-y-1 pl-2 border-l border-[#1A1A1A]/10">
-              {filteredCaseStudies.map((cs, index) => {
+            <div className="space-y-0.5 pt-0.5">
+              {filteredCaseStudies.map((cs) => {
                 const isActive = activeType === 'case-study' && activeId === cs.id;
                 const isItemCompleted = completed.includes(cs.id);
                 const isItemBookmarked = bookmarks.includes(cs.id);
@@ -261,28 +289,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onSelect('case-study', cs.id);
                       onCloseMobile();
                     }}
-                    className={`w-full text-left px-2.5 py-1.5 text-xs flex items-center justify-between transition-colors group ${
+                    className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-all group ${
                       isActive
-                        ? 'bg-[#1A1A1A] text-[#FDFCFB] font-semibold'
-                        : 'text-[#1A1A1A]/80 hover:text-[#1A1A1A] hover:bg-[#FFFFFF]'
+                        ? 'bg-sky-50 dark:bg-sky-950/60 text-sky-950 dark:text-sky-200 font-semibold shadow-2xs border-l-3 border-sky-600 dark:border-sky-400'
+                        : 'text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100/80 dark:hover:bg-neutral-800/50'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       {isItemCompleted ? (
-                        <Check className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                       ) : (
                         <span className={`w-1.5 h-1.5 rounded-full ${getDifficultyDot(cs.difficulty)} flex-shrink-0`} />
                       )}
-                      <span className={`truncate font-serif ${isActive ? 'italic' : ''}`}>
+                      <span className="truncate font-sans">
                         {cs.title.replace('Design ', '').replace('a ', '').replace('an ', '').split('(')[0]}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
+                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-1.5">
                       {isItemBookmarked && (
-                        <Bookmark className={`w-3 h-3 ${isActive ? 'text-[#FDFCFB]/80' : 'text-[#92400E]'}`} />
+                        <Bookmark className="w-3 h-3 fill-amber-500 text-amber-500" />
                       )}
-                      <span className={`text-[9px] font-mono ${isActive ? 'text-[#FDFCFB]/60' : 'text-[#1A1A1A]/40'}`}>
+                      <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${
+                        isActive ? 'bg-sky-100/70 dark:bg-sky-900/60 text-sky-900 dark:text-sky-300' : 'text-neutral-400'
+                      }`}>
                         {cs.readTime.replace(' min read', 'm')}
                       </span>
                     </div>
@@ -295,17 +325,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Editorial Access Footer */}
-      <div className="p-4 mt-auto bg-[#1A1A1A] text-[#FDFCFB] border-t border-[#1A1A1A]">
-        <p className="text-[11px] leading-relaxed font-serif text-[#FDFCFB]/80 italic">
-          "Mastering distributed systems by studying high-availability patterns in production."
-        </p>
+      <div className="p-3 bg-white/70 dark:bg-[#111420]/70 border-t border-neutral-200/80 dark:border-neutral-800 flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400 font-mono">
+        <span className="flex items-center gap-1">
+          <Sparkles className="w-3 h-3 text-indigo-500" /> High-Scale Systems
+        </span>
+        <kbd className="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-[10px] border border-neutral-200 dark:border-neutral-700">
+          ⌘K
+        </kbd>
       </div>
     </aside>
   );
 
   return (
     <>
-      {/* Desktop Sidebar */}
+      {/* Desktop Sticky Sidebar */}
       <div className="hidden lg:block h-[calc(100vh-64px)] sticky top-[64px] flex-shrink-0">
         {content}
       </div>
@@ -313,7 +346,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Mobile Drawer */}
       {isOpenMobile && (
         <div className="fixed inset-0 z-40 lg:hidden flex">
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-xs" onClick={onCloseMobile} />
+          <div className="fixed inset-0 bg-neutral-900/60 backdrop-blur-xs transition-opacity" onClick={onCloseMobile} />
           <div className="relative z-50 w-80 max-w-[85vw] h-full shadow-2xl">
             {content}
           </div>

@@ -9,7 +9,10 @@ import { InterviewFrameworkModal } from './components/InterviewFrameworkModal';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
 import { 
   ArrowRight, 
-  ArrowLeft
+  ArrowLeft,
+  Sparkles,
+  BookOpen,
+  Layers
 } from 'lucide-react';
 
 export function App() {
@@ -19,6 +22,39 @@ export function App() {
   const [isFrameworkOpen, setIsFrameworkOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [readingProgress, setReadingProgress] = useState<number>(0);
+  const [isSavedOnlyActive, setIsSavedOnlyActive] = useState<boolean>(false);
+
+  // Dark / Light Mode state
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('system_design_theme');
+      if (saved === 'dark' || saved === 'light') return saved;
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+      }
+      return 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  // Apply theme to html element and persist
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    try {
+      localStorage.setItem('system_design_theme', theme);
+    } catch (e) {
+      console.error('Failed to save theme', e);
+    }
+  }, [theme]);
+
+  const handleToggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   // User reading preferences & progress stored in localStorage
   const [bookmarks, setBookmarks] = useState<string[]>(() => {
@@ -119,7 +155,7 @@ export function App() {
       ? currentFundamental?.title 
       : currentCaseStudy?.title;
     if (activeTitle) {
-      document.title = `${activeTitle.replace('System Design: ', '')} | System Design Tutorial`;
+      document.title = `${activeTitle.replace('System Design: ', '')} | System Design Tutorials`;
     }
   }, [activeType, currentFundamental, currentCaseStudy]);
 
@@ -182,7 +218,7 @@ export function App() {
   const { prev, next, prevType = 'fundamental', nextType = 'case-study' } = findNextAndPrev();
 
   return (
-    <div className="min-h-screen bg-[#FDFCFB] text-[#1A1A1A] flex flex-col font-sans selection:bg-[#1A1A1A] selection:text-[#FDFCFB]">
+    <div className="min-h-screen bg-[#FAF9F6] text-neutral-900 dark:bg-[#0B0D13] dark:text-[#E2E8F0] flex flex-col font-sans selection:bg-indigo-600 selection:text-white transition-colors duration-200">
       {/* Top Navigation */}
       <Navbar
         onOpenSearch={() => setIsSearchOpen(true)}
@@ -195,6 +231,10 @@ export function App() {
         onChangeFontSize={handleChangeFontSize}
         bookmarkCount={bookmarks.length}
         completedCount={completed.length}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+        onToggleSavedOnly={() => setIsSavedOnlyActive(!isSavedOnlyActive)}
+        isSavedOnlyActive={isSavedOnlyActive}
       />
 
       {/* Main Workspace Layout */}
@@ -209,10 +249,12 @@ export function App() {
           onCloseMobile={() => setIsMobileSidebarOpen(false)}
           bookmarks={bookmarks}
           completed={completed}
+          isSavedOnlyActive={isSavedOnlyActive}
+          onToggleSavedOnly={() => setIsSavedOnlyActive(!isSavedOnlyActive)}
         />
 
         {/* Central Tutorial Reader Area */}
-        <main className={`flex-1 min-w-0 p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto overflow-y-auto ${
+        <main className={`flex-1 min-w-0 p-4 sm:p-6 lg:p-8 xl:p-10 max-w-6xl mx-auto overflow-y-auto ${
           fontSize === 'sm' ? 'font-scale-sm' : fontSize === 'lg' ? 'font-scale-lg' : 'font-scale-base'
         }`}>
           {activeType === 'fundamental' ? (
@@ -235,16 +277,20 @@ export function App() {
           )}
 
           {/* Bottom Pagination Links */}
-          <div className="mt-14 pt-8 border-t border-[#1A1A1A]/10 flex items-center justify-between gap-4">
+          <div className="mt-14 pt-8 border-t border-neutral-200/80 dark:border-neutral-800 flex items-center justify-between gap-4">
             {prev ? (
               <button
                 onClick={() => handleSelectTopic(prevType, prev.id)}
-                className="flex items-center gap-3 px-5 py-3.5 rounded-none bg-[#F9F7F2] hover:bg-[#F0EEE6] border border-[#1A1A1A]/10 text-left transition-colors group max-w-[48%]"
+                className="flex items-center gap-3.5 px-5 py-4 rounded-2xl bg-white dark:bg-[#111420] hover:bg-neutral-50 dark:hover:bg-[#151926] border border-neutral-200/80 dark:border-neutral-800 text-left transition-all group max-w-[48%] shadow-2xs hover:shadow-sm cursor-pointer"
               >
-                <ArrowLeft className="w-4 h-4 text-[#1A1A1A]/50 group-hover:text-[#1A1A1A] transition-colors flex-shrink-0" />
+                <div className="p-2 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/60 transition-colors flex-shrink-0">
+                  <ArrowLeft className="w-4 h-4" />
+                </div>
                 <div className="min-w-0">
-                  <span className="text-[9px] uppercase font-mono tracking-[0.2em] text-[#1A1A1A]/50 block">Previous Chapter</span>
-                  <span className="text-xs font-serif font-bold text-[#1A1A1A] truncate block mt-0.5">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-400 dark:text-neutral-500 block">
+                    Previous Chapter
+                  </span>
+                  <span className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-white truncate block mt-0.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                     {prev.title.replace('System Design: ', '').replace('Design ', '')}
                   </span>
                 </div>
@@ -254,22 +300,26 @@ export function App() {
             {next && (
               <button
                 onClick={() => handleSelectTopic(nextType, next.id)}
-                className="flex items-center justify-end gap-3 px-5 py-3.5 rounded-none bg-[#F9F7F2] hover:bg-[#F0EEE6] border border-[#1A1A1A]/10 text-right transition-colors group max-w-[48%] ml-auto"
+                className="flex items-center justify-end gap-3.5 px-5 py-4 rounded-2xl bg-white dark:bg-[#111420] hover:bg-neutral-50 dark:hover:bg-[#151926] border border-neutral-200/80 dark:border-neutral-800 text-right transition-all group max-w-[48%] ml-auto shadow-2xs hover:shadow-sm cursor-pointer"
               >
                 <div className="min-w-0">
-                  <span className="text-[9px] uppercase font-mono tracking-[0.2em] text-[#1A1A1A]/50 block">Next Chapter</span>
-                  <span className="text-xs font-serif font-bold text-[#1A1A1A] truncate block mt-0.5">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-400 dark:text-neutral-500 block">
+                    Next Chapter
+                  </span>
+                  <span className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-white truncate block mt-0.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                     {next.title.replace('System Design: ', '').replace('Design ', '')}
                   </span>
                 </div>
-                <ArrowRight className="w-4 h-4 text-[#1A1A1A]/50 group-hover:text-[#1A1A1A] transition-colors flex-shrink-0" />
+                <div className="p-2 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/60 transition-colors flex-shrink-0">
+                  <ArrowRight className="w-4 h-4" />
+                </div>
               </button>
             )}
           </div>
         </main>
       </div>
 
-      {/* Global Search Modal */}
+      {/* Global Search Modal (⌘K) */}
       <GlobalSearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}

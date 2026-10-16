@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-serif: "Newsreader", Georgia, Cambria, "Times New Roman", Times, serif;
   --font-display: "Instrument Serif", "Newsreader", Georgia, serif;
@@ -7,23 +9,23 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-/* Custom scrollbars for clean editorial aesthetic */
+/* Custom scrollbars for clean modern aesthetic */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #F9F7F2;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(26, 26, 26, 0.2);
-  border-radius: 3px;
+  background: rgba(120, 120, 120, 0.25);
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(26, 26, 26, 0.4);
+  background: rgba(120, 120, 120, 0.45);
 }
 
 /* Reading font scale adjustments */
@@ -40,6 +42,20 @@ html {
 }
 
 .font-scale-lg {
-  font-size: 17px;
+  font-size: 16.5px;
 }
+
+/* Architectural Canvas Blueprint Dot Matrix Pattern */
+.bg-dot-grid-light {
+  background-color: #faf9f6;
+  background-image: radial-gradient(rgba(0, 0, 0, 0.12) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.bg-dot-grid-dark {
+  background-color: #0d1117;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
 

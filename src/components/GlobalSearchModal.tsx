@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, X, BookOpen, Layers, CornerDownLeft, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, X, BookOpen, Layers, CornerDownLeft, Sparkles } from 'lucide-react';
 import { ALL_CASE_STUDIES } from '../data/case-studies-index';
 import { FUNDAMENTAL_TOPICS } from '../data/fundamentals';
 
@@ -91,45 +91,59 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-20 bg-[#1A1A1A]/60 backdrop-blur-xs font-sans">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16 sm:pt-24 bg-neutral-900/60 dark:bg-black/75 backdrop-blur-sm font-sans">
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        className="w-full max-w-2xl bg-[#FFFFFF] border border-[#1A1A1A]/20 shadow-2xl overflow-hidden flex flex-col"
+        initial={{ opacity: 0, scale: 0.96, y: -10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: -10 }}
+        className="w-full max-w-2xl bg-white dark:bg-[#111420] border border-neutral-200/90 dark:border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         {/* Search Input Bar */}
-        <div className="flex items-center gap-3 p-4 bg-[#F9F7F2] border-b border-[#1A1A1A]/10">
-          <Search className="w-5 h-5 text-[#1A1A1A]/60" />
+        <div className="flex items-center gap-3 p-4 bg-neutral-50/80 dark:bg-[#131722]/80 border-b border-neutral-200/80 dark:border-neutral-800">
+          <Search className="w-5 h-5 text-indigo-500 flex-shrink-0" />
           <input
             type="text"
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search 10 Fundamentals, 28 Case Studies, protocols, keywords (e.g. Redis Lua, H3, Kafka)..."
-            className="w-full bg-transparent text-sm text-[#1A1A1A] placeholder-[#1A1A1A]/40 focus:outline-none font-sans"
+            placeholder="Search 10 Fundamentals, 28 Case Studies, Kafka, Redis Lua, Snowflake ID..."
+            className="w-full bg-transparent text-sm sm:text-base text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none font-sans"
           />
           {query && (
-            <button onClick={() => setQuery('')} className="text-[#1A1A1A]/40 hover:text-[#1A1A1A]">
+            <button 
+              onClick={() => setQuery('')} 
+              className="p-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-white rounded-lg transition-colors cursor-pointer"
+            >
               <X className="w-4 h-4" />
             </button>
           )}
-          <kbd className="px-2 py-0.5 text-[10px] font-mono text-[#1A1A1A]/60 bg-[#FFFFFF] border border-[#1A1A1A]/20">
+          <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono font-semibold text-neutral-500 dark:text-neutral-400 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700">
             ESC
           </kbd>
         </div>
 
         {/* Results List */}
-        <div ref={resultsContainerRef} className="max-h-[60vh] overflow-y-auto p-2 divide-y divide-[#1A1A1A]/10">
+        <div ref={resultsContainerRef} className="max-h-[60vh] overflow-y-auto p-2 divide-y divide-neutral-100 dark:divide-neutral-800/60">
           {query.trim() === '' ? (
-            <div className="p-8 text-center text-xs text-[#1A1A1A]/60 space-y-3">
-              <p className="font-serif italic text-sm text-[#1A1A1A]">Type keywords to explore architectures & blueprints</p>
+            <div className="p-8 text-center text-xs text-neutral-500 dark:text-neutral-400 space-y-3">
+              <p className="font-serif italic text-sm text-neutral-800 dark:text-neutral-200">
+                Explore architectural blueprints, scalability patterns, and database designs
+              </p>
               <div className="flex flex-wrap justify-center gap-2 pt-2">
-                {['TinyURL', 'Uber H3', 'Kafka Outbox', 'Consistent Hashing', 'Snowflake ID', 'Stripe Ledger', 'Raft Consensus', 'Circuit Breaker'].map((s) => (
+                {[
+                  'TinyURL',
+                  'Uber H3 Geospatial',
+                  'Kafka Event Outbox',
+                  'Consistent Hashing',
+                  'Snowflake Distributed ID',
+                  'Payment Ledger',
+                  'Raft Consensus',
+                  'Token Bucket Rate Limiter'
+                ].map((s) => (
                   <button
                     key={s}
                     onClick={() => setQuery(s)}
-                    className="px-2.5 py-1 bg-[#F9F7F2] hover:bg-[#F0EEE6] text-[#1A1A1A] border border-[#1A1A1A]/15 text-xs transition-colors font-mono"
+                    className="px-3 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 dark:hover:text-indigo-400 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 text-xs transition-colors font-mono cursor-pointer"
                   >
                     {s}
                   </button>
@@ -137,7 +151,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
               </div>
             </div>
           ) : searchResults.length === 0 ? (
-            <div className="p-8 text-center text-xs text-[#1A1A1A]/60 font-serif italic">
+            <div className="p-8 text-center text-xs text-neutral-500 dark:text-neutral-400 font-serif italic">
               No matching fundamentals or case studies found for "{query}".
             </div>
           ) : (
@@ -151,36 +165,38 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                     onSelectTopic(item.type, item.id);
                     onClose();
                   }}
-                  className={`w-full text-left p-3.5 flex items-center justify-between gap-3 group transition-colors ${
-                    isSelected ? 'bg-[#1A1A1A] text-[#FDFCFB]' : 'hover:bg-[#F9F7F2] text-[#1A1A1A]'
+                  className={`w-full text-left p-3.5 rounded-xl flex items-center justify-between gap-3 group transition-all cursor-pointer ${
+                    isSelected 
+                      ? 'bg-indigo-600 text-white shadow-sm' 
+                      : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50 text-neutral-800 dark:text-neutral-200'
                   }`}
                 >
                   <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className={`p-2 mt-0.5 flex-shrink-0 ${
+                    <div className={`p-2 rounded-lg mt-0.5 flex-shrink-0 ${
                       isSelected
-                        ? 'bg-[#333333] text-[#FDFCFB] border border-[#555555]'
+                        ? 'bg-white/20 text-white'
                         : item.type === 'fundamental'
-                        ? 'bg-[#EBF3FA] text-[#1D3557] border border-[#1D3557]/20'
-                        : 'bg-[#F4F9F4] text-[#166534] border border-[#166534]/20'
+                        ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/50'
+                        : 'bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-200/60 dark:border-sky-800/50'
                     }`}>
                       {item.type === 'fundamental' ? <Layers className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold truncate font-sans ${isSelected ? 'text-[#FDFCFB]' : 'text-[#1A1A1A]'}`}>
+                        <span className={`text-xs sm:text-sm font-bold truncate font-sans ${isSelected ? 'text-white' : 'text-neutral-900 dark:text-white'}`}>
                           {item.title}
                         </span>
-                        <span className={`text-[9px] font-mono px-1.5 py-0.2 border flex-shrink-0 uppercase ${
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border flex-shrink-0 uppercase ${
                           isSelected
-                            ? 'bg-[#2E2E2E] text-[#FDFCFB]/80 border-[#444444]'
-                            : 'bg-[#F9F7F2] text-[#1A1A1A]/70 border-[#1A1A1A]/10'
+                            ? 'bg-white/20 text-white border-white/30'
+                            : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700'
                         }`}>
                           {item.category}
                         </span>
                       </div>
                       <p className={`text-xs truncate mt-0.5 font-sans ${
-                        isSelected ? 'text-[#FDFCFB]/70' : 'text-[#1A1A1A]/60'
+                        isSelected ? 'text-indigo-100' : 'text-neutral-500 dark:text-neutral-400'
                       }`}>
                         {item.tagline}
                       </p>
@@ -188,7 +204,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                   </div>
 
                   <div className={`flex items-center transition-colors ${
-                    isSelected ? 'text-[#FDFCFB]' : 'text-[#1A1A1A]/30'
+                    isSelected ? 'text-white' : 'text-neutral-300 dark:text-neutral-600'
                   }`}>
                     <CornerDownLeft className="w-4 h-4" />
                   </div>
@@ -199,20 +215,20 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         </div>
 
         {/* Modal Keyboard Footer */}
-        <div className="flex items-center justify-between p-3 px-4 bg-[#F9F7F2] border-t border-[#1A1A1A]/10 text-[10px] font-mono text-[#1A1A1A]/50">
+        <div className="flex items-center justify-between p-3 px-4 bg-neutral-50/80 dark:bg-[#131722]/80 border-t border-neutral-200/80 dark:border-neutral-800 text-[11px] font-mono text-neutral-500 dark:text-neutral-400">
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-[#FFFFFF] border border-[#1A1A1A]/15 font-bold">↑</kbd>
-              <kbd className="px-1.5 py-0.5 bg-[#FFFFFF] border border-[#1A1A1A]/15 font-bold">↓</kbd>
+            <span className="flex items-center gap-1.5">
+              <kbd className="px-1.5 py-0.5 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700 font-bold">↑</kbd>
+              <kbd className="px-1.5 py-0.5 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700 font-bold">↓</kbd>
               <span>to navigate</span>
             </span>
-            <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-[#FFFFFF] border border-[#1A1A1A]/15 font-bold">↵</kbd>
+            <span className="flex items-center gap-1.5">
+              <kbd className="px-1.5 py-0.5 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700 font-bold">↵</kbd>
               <span>to select</span>
             </span>
           </div>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-[#FFFFFF] border border-[#1A1A1A]/15 font-bold">esc</kbd>
+          <span className="flex items-center gap-1.5">
+            <kbd className="px-1.5 py-0.5 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700 font-bold">esc</kbd>
             <span>to close</span>
           </span>
         </div>

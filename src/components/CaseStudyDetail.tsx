@@ -116,7 +116,7 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
   return (
     <div className="relative flex gap-8 items-start font-sans pb-16">
       {/* Central Reading Area */}
-      <div className="flex-1 min-w-0 max-w-4xl space-y-10">
+      <div className="flex-1 min-w-0 max-w-6xl space-y-10">
         {/* Header Breadcrumbs & Action Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200/80 dark:border-neutral-800 pb-4">
           <div className="flex items-center gap-2.5 text-xs font-mono uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
@@ -188,7 +188,7 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
             {caseStudy.title}
           </h1>
 
-          <p className="text-base sm:text-lg font-serif text-neutral-700 dark:text-neutral-300 leading-relaxed max-w-4xl">
+          <p className="text-base sm:text-lg font-serif text-neutral-700 dark:text-neutral-300 leading-relaxed max-w-5xl">
             {caseStudy.tagline}
           </p>
 

@@ -254,7 +254,7 @@ export function App() {
         />
 
         {/* Central Tutorial Reader Area */}
-        <main className={`flex-1 min-w-0 p-4 sm:p-6 lg:p-8 xl:p-10 max-w-6xl mx-auto overflow-y-auto ${
+        <main className={`flex-1 min-w-0 p-4 sm:p-6 lg:p-8 xl:p-10 max-w-[1600px] w-full mx-auto overflow-y-auto ${
           fontSize === 'sm' ? 'font-scale-sm' : fontSize === 'lg' ? 'font-scale-lg' : 'font-scale-base'
         }`}>
           {activeType === 'fundamental' ? (

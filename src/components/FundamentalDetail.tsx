@@ -56,7 +56,7 @@ export const FundamentalDetail: React.FC<FundamentalDetailProps> = ({
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-10 pb-16 font-sans">
+    <div className="max-w-6xl mx-auto space-y-10 pb-16 font-sans">
       {/* Breadcrumb Header & Action Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200/80 dark:border-neutral-800 pb-4">
         <div className="flex items-center gap-2.5 text-xs font-mono uppercase tracking-wider text-neutral-500 dark:text-neutral-400">

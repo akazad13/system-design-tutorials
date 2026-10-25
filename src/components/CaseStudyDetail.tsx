@@ -23,7 +23,9 @@ import {
   Zap,
   HardDrive,
   Wifi,
-  Sparkles
+  Sparkles,
+  Copy,
+  ExternalLink
 } from 'lucide-react';
 
 interface CaseStudyDetailProps {
@@ -46,12 +48,24 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
   const [activeTab, setActiveTab] = useState<'architecture' | 'capacity' | 'api_db' | 'deep_dives'>('architecture');
   const [viewMode, setViewMode] = useState<'continuous' | 'tabbed'>('continuous');
   const [isCopied, setIsCopied] = useState(false);
+  const [copiedStat, setCopiedStat] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<string>('overview');
+  const [checkedRequirements, setCheckedRequirements] = useState<Record<string, boolean>>({});
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const handleCopyStat = (label: string, value: string) => {
+    navigator.clipboard.writeText(`${label}: ${value}`);
+    setCopiedStat(label);
+    setTimeout(() => setCopiedStat(null), 1800);
+  };
+
+  const toggleReqCheck = (key: string) => {
+    setCheckedRequirements((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   // Scroll spy to track active section in continuous reading mode
@@ -190,45 +204,105 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
           {/* Scale Metric Callout Stat Cards */}
           {caseStudy.scaleSummary && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-              <div className="p-4 rounded-xl bg-white dark:bg-[#111420] border border-neutral-200/80 dark:border-neutral-800 space-y-1 shadow-2xs hover:border-emerald-300 dark:hover:border-emerald-700/60 transition-colors">
-                <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
-                  <Users className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-[10px] uppercase font-mono tracking-wider">Daily Scale</span>
+              <div 
+                onClick={() => handleCopyStat('Daily Scale', caseStudy.scaleSummary.dau)}
+                className="p-4 rounded-xl bg-white dark:bg-[#111420] border border-neutral-200/80 dark:border-neutral-800 space-y-1 shadow-2xs hover:border-emerald-300 dark:hover:border-emerald-700/60 transition-colors cursor-pointer group"
+                title="Click to copy metric"
+              >
+                <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400">
+                  <div className="flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-[10px] uppercase font-mono tracking-wider">Daily Scale</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {copiedStat === 'Daily Scale' ? 'Copied' : 'Copy'}
+                  </span>
                 </div>
                 <span className="text-sm sm:text-base font-bold font-mono text-emerald-700 dark:text-emerald-300 block truncate">
                   {caseStudy.scaleSummary.dau}
                 </span>
               </div>
 
-              <div className="p-4 rounded-xl bg-white dark:bg-[#111420] border border-neutral-200/80 dark:border-neutral-800 space-y-1 shadow-2xs hover:border-sky-300 dark:hover:border-sky-700/60 transition-colors">
-                <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
-                  <Zap className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
-                  <span className="text-[10px] uppercase font-mono tracking-wider">Peak QPS</span>
+              <div 
+                onClick={() => handleCopyStat('Peak QPS', caseStudy.scaleSummary.qps)}
+                className="p-4 rounded-xl bg-white dark:bg-[#111420] border border-neutral-200/80 dark:border-neutral-800 space-y-1 shadow-2xs hover:border-sky-300 dark:hover:border-sky-700/60 transition-colors cursor-pointer group"
+                title="Click to copy metric"
+              >
+                <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400">
+                  <div className="flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                    <span className="text-[10px] uppercase font-mono tracking-wider">Peak QPS</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {copiedStat === 'Peak QPS' ? 'Copied' : 'Copy'}
+                  </span>
                 </div>
                 <span className="text-sm sm:text-base font-bold font-mono text-sky-700 dark:text-sky-300 block truncate">
                   {caseStudy.scaleSummary.qps}
                 </span>
               </div>
 
-              <div className="p-4 rounded-xl bg-white dark:bg-[#111420] border border-neutral-200/80 dark:border-neutral-800 space-y-1 shadow-2xs hover:border-amber-300 dark:hover:border-amber-700/60 transition-colors">
-                <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
-                  <HardDrive className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                  <span className="text-[10px] uppercase font-mono tracking-wider">Storage Volume</span>
+              <div 
+                onClick={() => handleCopyStat('Storage Volume', caseStudy.scaleSummary.storage)}
+                className="p-4 rounded-xl bg-white dark:bg-[#111420] border border-neutral-200/80 dark:border-neutral-800 space-y-1 shadow-2xs hover:border-amber-300 dark:hover:border-amber-700/60 transition-colors cursor-pointer group"
+                title="Click to copy metric"
+              >
+                <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400">
+                  <div className="flex items-center gap-1.5">
+                    <HardDrive className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    <span className="text-[10px] uppercase font-mono tracking-wider">Storage Volume</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {copiedStat === 'Storage Volume' ? 'Copied' : 'Copy'}
+                  </span>
                 </div>
                 <span className="text-sm sm:text-base font-bold font-mono text-amber-700 dark:text-amber-300 block truncate">
                   {caseStudy.scaleSummary.storage}
                 </span>
               </div>
 
-              <div className="p-4 rounded-xl bg-white dark:bg-[#111420] border border-neutral-200/80 dark:border-neutral-800 space-y-1 shadow-2xs hover:border-indigo-300 dark:hover:border-indigo-700/60 transition-colors">
-                <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
-                  <Wifi className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                  <span className="text-[10px] uppercase font-mono tracking-wider">Bandwidth</span>
+              <div 
+                onClick={() => handleCopyStat('Bandwidth', caseStudy.scaleSummary.bandwidth)}
+                className="p-4 rounded-xl bg-white dark:bg-[#111420] border border-neutral-200/80 dark:border-neutral-800 space-y-1 shadow-2xs hover:border-indigo-300 dark:hover:border-indigo-700/60 transition-colors cursor-pointer group"
+                title="Click to copy metric"
+              >
+                <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400">
+                  <div className="flex items-center gap-1.5">
+                    <Wifi className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-[10px] uppercase font-mono tracking-wider">Bandwidth</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {copiedStat === 'Bandwidth' ? 'Copied' : 'Copy'}
+                  </span>
                 </div>
                 <span className="text-sm sm:text-base font-bold font-mono text-indigo-700 dark:text-indigo-300 block truncate">
                   {caseStudy.scaleSummary.bandwidth}
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Quick Jump Navigation Bar (Continuous Mode) */}
+          {viewMode === 'continuous' && (
+            <div className="flex items-center gap-1.5 overflow-x-auto py-2 text-xs">
+              <span className="text-[10px] font-mono uppercase text-neutral-400 mr-1 flex items-center gap-1">
+                Jump To:
+              </span>
+              {[
+                { id: 'requirements', label: 'Requirements' },
+                { id: 'architecture', label: 'Schematic' },
+                { id: 'capacity', label: 'Capacity' },
+                { id: 'api-db', label: 'API & DB' },
+                { id: 'deep-dives', label: 'Deep Dives' },
+              ].map((link) => (
+                <button
+                  key={link.id}
+                  onClick={() => scrollToSection(link.id)}
+                  className="px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 hover:bg-neutral-200/80 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-[11px] font-mono transition-colors whitespace-nowrap cursor-pointer"
+                >
+                  #{link.label}
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -246,12 +320,25 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
               </h3>
             </div>
             <ul className="space-y-2 text-xs sm:text-sm text-neutral-700 dark:text-neutral-300">
-              {caseStudy.functionalRequirements.map((req, i) => (
-                <li key={i} className="flex items-start gap-2.5">
-                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">•</span>
-                  <span className="leading-relaxed">{req}</span>
-                </li>
-              ))}
+              {caseStudy.functionalRequirements.map((req, i) => {
+                const key = `func-${i}`;
+                const isChecked = !!checkedRequirements[key];
+
+                return (
+                  <li 
+                    key={i} 
+                    onClick={() => toggleReqCheck(key)}
+                    className="flex items-start gap-2.5 cursor-pointer select-none group"
+                  >
+                    <span className={`text-xs mt-0.5 transition-colors ${isChecked ? 'text-emerald-500 font-bold' : 'text-neutral-400 group-hover:text-emerald-400'}`}>
+                      {isChecked ? '✓' : '○'}
+                    </span>
+                    <span className={`leading-relaxed transition-all ${isChecked ? 'line-through opacity-70 text-neutral-500' : ''}`}>
+                      {req}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
@@ -266,12 +353,25 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
               </h3>
             </div>
             <ul className="space-y-2 text-xs sm:text-sm text-neutral-700 dark:text-neutral-300">
-              {caseStudy.nonFunctionalRequirements.map((req, i) => (
-                <li key={i} className="flex items-start gap-2.5">
-                  <span className="text-sky-600 dark:text-sky-400 font-bold">⚡</span>
-                  <span className="leading-relaxed">{req}</span>
-                </li>
-              ))}
+              {caseStudy.nonFunctionalRequirements.map((req, i) => {
+                const key = `nonfunc-${i}`;
+                const isChecked = !!checkedRequirements[key];
+
+                return (
+                  <li 
+                    key={i} 
+                    onClick={() => toggleReqCheck(key)}
+                    className="flex items-start gap-2.5 cursor-pointer select-none group"
+                  >
+                    <span className={`text-xs mt-0.5 transition-colors ${isChecked ? 'text-sky-500 font-bold' : 'text-neutral-400 group-hover:text-sky-400'}`}>
+                      {isChecked ? '✓' : '⚡'}
+                    </span>
+                    <span className={`leading-relaxed transition-all ${isChecked ? 'line-through opacity-70 text-neutral-500' : ''}`}>
+                      {req}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </section>
@@ -288,7 +388,7 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Continuous Reading Mode</span>
+              <span>Continuous Chapter Mode</span>
             </button>
             <button
               onClick={() => setViewMode('tabbed')}
@@ -304,7 +404,7 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
           </div>
 
           <span className="text-xs font-mono text-neutral-400 hidden sm:inline">
-            {viewMode === 'continuous' ? 'Full chapter layout with outline' : 'Domain focused layout'}
+            {viewMode === 'continuous' ? 'Full chapter layout with live outline' : 'Deep focused tabbed views'}
           </span>
         </div>
 
@@ -320,7 +420,7 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Architecture ({caseStudy.architecture.nodes.length} Nodes)</span>
+              <span>Architecture ({caseStudy.architecture.nodes.length})</span>
             </button>
 
             <button
@@ -332,7 +432,7 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
               }`}
             >
               <Activity className="w-3.5 h-3.5" />
-              <span>Capacity Estimations</span>
+              <span>Capacity Math ({caseStudy.capacityEstimations.metrics.length})</span>
             </button>
 
             <button
@@ -344,7 +444,7 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
               }`}
             >
               <Database className="w-3.5 h-3.5" />
-              <span>API & Database Design</span>
+              <span>API & DB ({caseStudy.apiDesign.length} Endpoints)</span>
             </button>
 
             <button
@@ -356,7 +456,7 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
               }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
-              <span>Deep Dives & Interview Drill</span>
+              <span>Deep Dives ({caseStudy.deepDives.length})</span>
             </button>
           </div>
         )}
@@ -518,7 +618,7 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
 
       {/* Sticky Table of Contents Sidebar (Desktop View) */}
       {viewMode === 'continuous' && (
-        <aside className="hidden xl:block w-60 sticky top-20 flex-shrink-0 p-4 bg-white dark:bg-[#111420] border border-neutral-200/80 dark:border-neutral-800 rounded-2xl space-y-3.5 shadow-sm transition-colors">
+        <aside className="hidden xl:block w-64 sticky top-20 flex-shrink-0 p-4 bg-white dark:bg-[#111420] border border-neutral-200/80 dark:border-neutral-800 rounded-2xl space-y-3.5 shadow-sm transition-colors">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 font-mono border-b border-neutral-200/80 dark:border-neutral-800 pb-2.5">
             <ListOrdered className="w-3.5 h-3.5 text-indigo-500" />
             <span>Chapter Outline</span>
@@ -538,7 +638,7 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
                 onClick={() => scrollToSection(item.id)}
                 className={`w-full text-left px-3 py-2 text-xs transition-all rounded-lg block font-sans cursor-pointer ${
                   activeSection === item.id
-                    ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-900 dark:text-indigo-200 font-semibold border-l-2 border-indigo-600 dark:border-indigo-400'
+                    ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-900 dark:text-indigo-200 font-semibold border-l-2 border-indigo-600 dark:border-indigo-400 shadow-2xs'
                     : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/50'
                 }`}
               >
@@ -548,9 +648,9 @@ export const CaseStudyDetail: React.FC<CaseStudyDetailProps> = ({
           </nav>
 
           <div className="pt-3 border-t border-neutral-200/80 dark:border-neutral-800 text-[11px] font-mono text-neutral-500 dark:text-neutral-400 flex items-center justify-between">
-            <span>Progress:</span>
+            <span>Chapter Status:</span>
             <span className={isCompleted ? 'text-emerald-600 dark:text-emerald-400 font-bold' : ''}>
-              {isCompleted ? '100% (Done)' : 'In Progress'}
+              {isCompleted ? '100% Completed' : 'Reading'}
             </span>
           </div>
         </aside>

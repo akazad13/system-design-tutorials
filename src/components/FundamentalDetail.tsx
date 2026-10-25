@@ -48,6 +48,13 @@ export const FundamentalDetail: React.FC<FundamentalDetailProps> = ({
     setTimeout(() => setIsCopied(false), 2000);
   };
 
+  const scrollTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-10 pb-16 font-sans">
       {/* Breadcrumb Header & Action Bar */}
@@ -124,6 +131,49 @@ export const FundamentalDetail: React.FC<FundamentalDetailProps> = ({
         <p className="text-base sm:text-lg font-serif text-neutral-700 dark:text-neutral-300 leading-relaxed max-w-4xl">
           {topic.summary}
         </p>
+
+        {/* Quick jump pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1 text-xs">
+          <span className="text-[10px] font-mono uppercase text-neutral-400 mr-1">Section Jump:</span>
+          {topic.diagram && (
+            <button
+              onClick={() => scrollTo('architecture')}
+              className="px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200/80 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-[11px] font-mono transition-colors cursor-pointer"
+            >
+              #Schematic
+            </button>
+          )}
+          <button
+            onClick={() => scrollTo('concepts')}
+            className="px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200/80 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-[11px] font-mono transition-colors cursor-pointer"
+          >
+            #Core Concepts
+          </button>
+          {topic.cheatSheet?.length > 0 && (
+            <button
+              onClick={() => scrollTo('cheatsheet')}
+              className="px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200/80 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-[11px] font-mono transition-colors cursor-pointer"
+            >
+              #Cheat Sheet
+            </button>
+          )}
+          {topic.commonMistakes?.length > 0 && (
+            <button
+              onClick={() => scrollTo('pitfalls')}
+              className="px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200/80 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-[11px] font-mono transition-colors cursor-pointer"
+            >
+              #Pitfalls
+            </button>
+          )}
+          {topic.interviewTips?.length > 0 && (
+            <button
+              onClick={() => scrollTo('interview-tips')}
+              className="px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200/80 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-[11px] font-mono transition-colors cursor-pointer"
+            >
+              #Interview Tips
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Interactive Architectural Blueprint Visualizer */}

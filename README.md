@@ -121,6 +121,12 @@ npm run preview
 
 ---
 
+## 🤖 AI-Driven Development & Contributing
+
+Autonomous coding agents (Antigravity, Cursor, Claude Code, GitHub Copilot) operating in this repository must consult [AGENTS.md](AGENTS.md) for case study data contracts (`src/data/`), Gemini client patterns (`src/lib/`), and TypeScript validation standards.
+
+---
+
 ## 👤 Author
 
 **Md. Abul Kalam**

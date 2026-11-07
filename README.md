@@ -12,6 +12,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 [Overview](#-overview) •
+[Architecture & Decisions](#-architecture--decisions) •
 [Interactive Case Studies](#-28-interactive-case-studies) •
 [Tech Stack](#-tech-stack) •
 [Quick Start](#-quick-start) •
@@ -37,7 +38,7 @@
 
 ---
 
-## 🏛 Architecture
+## 🏛️ Architecture & Decisions
 
 ```mermaid
 flowchart TD
@@ -52,6 +53,15 @@ flowchart TD
 
 > [!NOTE]
 > Each case study provides interactive controls to toggle component failures, trace latency hot-spots, and view back-of-the-envelope resource requirements.
+
+### Architecture Decision Records (ADRs)
+
+Key architectural decisions, trade-offs, and technical invariants are formally documented using ADRs in [`docs/adr/`](docs/adr/README.md):
+
+- [**ADR-0001: Record Architecture Decisions**](docs/adr/0001-record-architecture-decisions.md) — Standardized MADR format, directory layout, lifecycle, and review procedures.
+- [**ADR-0002: Vite + React Architecture for Interactive System Design Platform**](docs/adr/0002-vite-react-system-design-platform.md) — Rationale for client-side Vite 6 + React 19 SPA, custom lightweight SVG canvas, and decoupled data schemas.
+
+Refer to the complete index in [docs/adr/README.md](docs/adr/README.md) for the active decision log.
 
 ---
 

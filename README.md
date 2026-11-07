@@ -16,6 +16,7 @@
 [Interactive Case Studies](#-28-interactive-case-studies) •
 [Tech Stack](#-tech-stack) •
 [Quick Start](#-quick-start) •
+[Testing & Verification](#-testing--verification) •
 [Author](#-author) •
 [License](#-license)
 
@@ -60,6 +61,7 @@ Key architectural decisions, trade-offs, and technical invariants are formally d
 
 - [**ADR-0001: Record Architecture Decisions**](docs/adr/0001-record-architecture-decisions.md) — Standardized MADR format, directory layout, lifecycle, and review procedures.
 - [**ADR-0002: Vite + React Architecture for Interactive System Design Platform**](docs/adr/0002-vite-react-system-design-platform.md) — Rationale for client-side Vite 6 + React 19 SPA, custom lightweight SVG canvas, and decoupled data schemas.
+- [**ADR-0003: Testing Paradigm and Agentic Verification for Interactive Web Platform**](docs/adr/0003-testing-paradigm-and-agentic-verification.md) — Compile-time type verification (`tsc --noEmit`), blueprint data schema validation, and Vite build verification for sub-second agentic verification loops.
 
 Refer to the complete index in [docs/adr/README.md](docs/adr/README.md) for the active decision log.
 
@@ -128,6 +130,24 @@ Open [http://localhost:3000](http://localhost:3000) to launch the interactive ha
 npm run build
 npm run preview
 ```
+
+---
+
+## 🧪 Testing & Verification
+
+The project follows a fast, deterministic testing and verification loop ([ADR-0003](docs/adr/0003-testing-paradigm-and-agentic-verification.md)) designed for sub-second agentic verification:
+
+```bash
+# Compile-time static type & blueprint schema check (<1s)
+npm run lint
+
+# Production build & asset bundling verification
+npm run build
+```
+
+- **Compile-Time Type & Schema Assertions**: Every distributed system blueprint, node coordinate, request flow step, and capacity estimation in `src/data/` is strictly verified against TypeScript contracts (`src/types/system-design.ts`).
+- **Build Verification**: `vite build` validates module resolutions, asset bundling, and Tailwind CSS v4 stylesheets.
+- **Invariants**: Strict data decoupling, zero runtime console errors, and sub-second feedback loops for both human and agentic workflows.
 
 ---
 

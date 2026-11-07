@@ -44,6 +44,7 @@ This document provides mandatory guidance for autonomous AI coding agents (Antig
 | :--- | :--- | :--- |
 | [ADR-0001](docs/adr/0001-record-architecture-decisions.md) | Record Architecture Decisions | Standardized MADR format, sequential numbering, and centralized index in `docs/adr/README.md`. |
 | [ADR-0002](docs/adr/0002-vite-react-system-design-platform.md) | Vite + React Architecture for System Design Platform | Client-side Vite 6 + React 19 SPA, custom lightweight SVG canvas, and strict separation between `src/data/` blueprints and `src/components/` visualizers. |
+| [ADR-0003](docs/adr/0003-testing-paradigm-and-agentic-verification.md) | Testing Paradigm and Agentic Verification | Compile-time type verification (`tsc --noEmit`), blueprint data schema validation, and Vite build verification for sub-second agentic verification loops. |
 
 ---
 
@@ -56,7 +57,10 @@ npm install
 # Start local dev server
 npm run dev
 
-# Run TypeScript checks & Vite production build
+# Sub-second compile-time type verification & schema check
+npm run lint
+
+# Run Vite production build verification
 npm run build
 
 # Preview build locally
@@ -65,9 +69,28 @@ npm run preview
 
 ---
 
-## 5. Verification Gates for AI Agents
+## 5. Testing Paradigm & Agentic Verification
+
+Autonomous agents must follow the fast, deterministic testing loop codified in [ADR-0003](docs/adr/0003-testing-paradigm-and-agentic-verification.md):
+
+1. **Compile-Time Type & Schema Assertions (`npm run lint` / `tsc --noEmit`)**:
+   - Every architectural blueprint in `src/data/` must strictly conform to `src/types/system-design.ts`.
+   - TypeScript compile-time checking acts as our instantaneous unit and integration test suite (<1s execution).
+   - Ensure `src/vite-env.d.ts` is preserved for Vite client type declarations.
+2. **Build Verification (`npm run build` / `vite build`)**:
+   - Verifies bundle integrity, dynamic import resolution, and Tailwind CSS v4 pipeline.
+   - Must complete with **0 errors**.
+3. **Core Verification Invariants**:
+   - **Data Decoupling**: Keep case study topologies, flow steps, and calculations in `src/data/`. Do not hardcode blueprint details inside UI components.
+   - **Zero Console Errors**: Ensure interactive components (calculators, SVG tracers, modals) run without unhandled runtime exceptions.
+   - **Sub-Second Agentic Loop**: Always verify changes via `npm run lint` and `npm run build` prior to finishing tasks.
+
+---
+
+## 6. Verification Gates for AI Agents
 
 Before submitting code changes or finishing a turn:
-1. Run `npm run build` — must compile with **0 errors**.
-2. Verify that interactive calculators and animated tracers execute smoothly.
-3. If introducing architectural shifts or major new dependencies, ensure a corresponding ADR is added in `docs/adr/` and indexed in `docs/adr/README.md`.
+1. Run `npm run lint` (`tsc --noEmit`) — must exit with **0 type errors**.
+2. Run `npm run build` (`vite build`) — must exit with **0 build errors**.
+3. Verify that interactive calculators and animated tracers execute smoothly with zero console errors.
+4. If introducing architectural shifts or major new dependencies, ensure a corresponding ADR is added in `docs/adr/` and indexed in `docs/adr/README.md`.

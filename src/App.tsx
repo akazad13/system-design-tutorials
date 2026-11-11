@@ -7,6 +7,7 @@ import { FundamentalDetail } from './components/FundamentalDetail';
 import { CaseStudyDetail } from './components/CaseStudyDetail';
 import { InterviewFrameworkModal } from './components/InterviewFrameworkModal';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
+import { shortTitle } from './lib/display';
 import { 
   ArrowRight, 
   ArrowLeft,
@@ -185,6 +186,30 @@ export function App() {
     });
   };
 
+  // Reading font for long-form text: Inter (sans) or Newsreader (serif). index.html applies it before first paint.
+  const [readingFont, setReadingFont] = useState<'sans' | 'serif'>(() => {
+    try {
+      return localStorage.getItem('system_design_reading_font') === 'serif' ? 'serif' : 'sans';
+    } catch {
+      return 'sans';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.readingFont = readingFont;
+    try {
+      localStorage.setItem('system_design_reading_font', readingFont);
+    } catch (e) {
+      console.error('Failed to save reading font', e);
+    }
+  }, [readingFont]);
+
+  // Apply the reader text size to the root element so every rem-based size scales with it
+  useEffect(() => {
+    const rootSize = { sm: '15px', base: '16px', lg: '18px' }[fontSize];
+    document.documentElement.style.fontSize = rootSize;
+  }, [fontSize]);
+
   // Font size change handler
   const handleChangeFontSize = (size: 'sm' | 'base' | 'lg') => {
     setFontSize(size);
@@ -229,6 +254,8 @@ export function App() {
         readingProgress={readingProgress}
         fontSize={fontSize}
         onChangeFontSize={handleChangeFontSize}
+        readingFont={readingFont}
+        onChangeReadingFont={setReadingFont}
         bookmarkCount={bookmarks.length}
         completedCount={completed.length}
         theme={theme}
@@ -254,9 +281,7 @@ export function App() {
         />
 
         {/* Central Tutorial Reader Area */}
-        <main className={`flex-1 min-w-0 p-4 sm:p-6 lg:p-8 xl:p-10 max-w-[1600px] w-full mx-auto overflow-y-auto ${
-          fontSize === 'sm' ? 'font-scale-sm' : fontSize === 'lg' ? 'font-scale-lg' : 'font-scale-base'
-        }`}>
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 xl:p-10 max-w-[1600px] w-full mx-auto overflow-y-auto">
           {activeType === 'fundamental' ? (
             <FundamentalDetail 
               topic={currentFundamental} 
@@ -291,7 +316,7 @@ export function App() {
                     Previous Chapter
                   </span>
                   <span className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-white truncate block mt-0.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                    {prev.title.replace('System Design: ', '').replace('Design ', '')}
+                    {shortTitle(prev.title)}
                   </span>
                 </div>
               </button>
@@ -307,7 +332,7 @@ export function App() {
                     Next Chapter
                   </span>
                   <span className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-white truncate block mt-0.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                    {next.title.replace('System Design: ', '').replace('Design ', '')}
+                    {shortTitle(next.title)}
                   </span>
                 </div>
                 <div className="p-2 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/60 transition-colors flex-shrink-0">

@@ -5,67 +5,69 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
     id: 'tinyurl',
     title: 'Design a URL Shortener (TinyURL / Bitly)',
     slug: 'url-shortener',
-    tagline: 'High-throughput, read-heavy global URL redirection service with low latency and expiring links.',
+    tagline: 'Turn long links into short ones, and redirect billions of clicks a month quickly and without downtime.',
     category: 'Social & Content',
     difficulty: 'Beginner',
     readTime: '15 min read',
     scaleSummary: {
       dau: '100 Million Active Users',
       qps: '11,600 Read QPS (Peak) / 116 Write QPS (Peak)',
-      storage: '15 TB over 5 years (100M URLs created/month)',
-      bandwidth: '5.8 MB/s Ingress / 58 MB/s Egress'
+      storage: '9 TB over 5 years (3 TB raw × 3 replicas)',
+      bandwidth: '58 KB/s in / 5.8 MB/s out (peak)'
     },
-    overview: 'A URL shortening service creates short aliases for long URLs (e.g. https://tinyurl.com/a9x3z1 -> https://en.wikipedia.org/wiki/Distributed_computing). The primary requirement is sub-15ms redirection latency, 99.999% availability, and resilient key generation without collisions.',
+    overview: 'A URL shortener maps a short key to a long URL. For example, https://tiny.cc/a9x3z1 can point to https://en.wikipedia.org/wiki/Distributed_computing. The service does two jobs: create short links (rare) and redirect clicks (very frequent, about 100 reads for every write). The design goals are redirects in under 15 ms, 99.999% availability, and short keys that never collide.',
     keyChallenges: [
-      'Generating unique 6-8 character short keys under high concurrent write loads without DB collisions',
-      'Minimizing redirect latency (P99 < 10ms) using multi-tier caching and CDN edge redirects',
-      'Handling 100:1 Read-to-Write ratio with 80/20 Pareto caching distribution',
-      'Automated link expiration and analytics tracking without blocking the critical redirect path'
+      'Create unique 6 to 8 character keys while many servers write at the same time, without two links ever getting the same key.',
+      'Keep redirects fast (P99 under 10 ms) with several cache layers, including the CDN edge.',
+      'Serve about 100 reads for every write. A small share of links gets most of the clicks, so caching the hottest 20% handles most traffic.',
+      'Expire old links and record click analytics without slowing down the redirect itself.'
     ],
     functionalRequirements: [
-      'Given a long URL, generate a unique, short alias (e.g., https://tiny.cc/xyz123)',
-      'When accessing a short link, redirect user to the original long URL with HTTP 301 or 302',
-      'Support custom vanity aliases (e.g. tiny.cc/my-awesome-link)',
-      'Allow users to set optional expiration timestamps on links',
-      'Collect basic analytics (click counts, referrer, geolocation)'
+      'Create a short link for a long URL (for example https://tiny.cc/xyz123).',
+      'Redirect a visitor from the short link to the long URL with HTTP 301 or 302.',
+      'Let users choose a custom alias (for example tiny.cc/my-awesome-link).',
+      'Let users set an optional expiry time on a link.',
+      'Count clicks and record basic analytics: referrer and country.'
     ],
     nonFunctionalRequirements: [
-      'High Availability: 99.999% uptime (redirections should never fail)',
-      'Ultra Low Latency: Redirect lookup in < 15ms',
-      'Short URLs must be unpredictable (prevent enumeration attacks)',
-      'Read Heavy: Read-to-Write ratio of 100:1'
+      'Availability: 99.999% uptime, about 5 minutes of downtime per year. A failed redirect breaks the link everywhere it was shared.',
+      'Latency: find and return a redirect in under 15 ms.',
+      'Security: short keys must not be guessable, so nobody can list all links by counting up.',
+      'Read-heavy: about 100 redirects for every new link.'
     ],
     outOfScope: [
-      'Real-time fraud/malware deep inspection pipeline',
-      'Complex enterprise user permissions and billing dashboards'
+      'Real-time scanning of links for fraud or malware.',
+      'Enterprise features such as team permissions and billing dashboards.'
     ],
     capacityEstimations: {
       assumptions: [
-        'New URL writes: 100 Million per month (100M / 30 / 86400 ≈ ~38.6 writes/sec avg, peak 116 QPS at 3x)',
-        'URL reads/redirections: 10 Billion per month (~3,850 reads/sec average, peak 11,600 QPS at 3x)',
-        'Storage retention: 5 years default',
-        'Average URL mapping record size: 500 bytes (Short Key: 8 bytes, Long URL: 450 bytes, Timestamps, User ID)'
+        'New links: 100 million per month. 100M / (30 × 86,400 s) ≈ 38.6 writes/s on average. Peak traffic is about 3× the average, so about 116 writes/s.',
+        'Redirects: 10 billion per month (100× the writes). That is about 3,860 reads/s on average and about 11,600 reads/s at peak.',
+        'Links are kept for 5 years.',
+        'One stored link is about 500 bytes: short key (8 B), long URL (up to about 450 B), timestamps and user ID.',
+        'The database keeps 3 copies of every record (replication factor 3). Sizes are before compression.'
       ],
       metrics: [
-        { label: 'Write QPS', value: '116 / sec', formula: '100M / (30 * 86,400) * 3x peak factor', description: 'Peak write generation requests (avg ~38.6 QPS)' },
-        { label: 'Read QPS', value: '11,600 / sec', formula: '10B / (30 * 86,400) * 3x peak factor', description: 'Peak redirect lookups' },
-        { label: '5-Year Storage', value: '15 TB', formula: '100M URLs/mo * 12 * 5 yrs * 500 bytes', description: 'Total database storage capacity required' },
-        { label: 'Cache RAM (20% Daily Reads)', value: '38 GB', formula: '333M daily reads * 0.20 * 500 bytes', description: 'In-memory Redis cache for hot 20% URLs' }
+        { label: 'Write QPS', value: '116 / sec', formula: '100M / (30 × 86,400) × 3 (peak factor)', description: 'Peak rate of new links (average about 38.6/s)' },
+        { label: 'Read QPS', value: '11,600 / sec', formula: '10B / (30 × 86,400) × 3 (peak factor)', description: 'Peak rate of redirects' },
+        { label: '5-Year Storage', value: '9 TB', formula: '100M links/month × 12 × 5 years × 500 B × 3 replicas', description: '6 billion links make 3 TB of raw data. Three copies for durability make 9 TB.' },
+        { label: 'Cache RAM (20% of Daily Reads)', value: '33 GB', formula: '333M reads/day × 0.20 × 500 B', description: 'Redis memory for the hottest 20% of links. This is an upper bound: many reads are for the same link, so the real set of hot links is smaller.' },
+        { label: 'Peak Egress Bandwidth', value: '5.8 MB/s', formula: '11,600 redirects/s × ~500 B per response', description: 'Outgoing redirect responses. Incoming create requests are only about 116 × 500 B ≈ 58 KB/s.' }
       ],
-      conclusion: 'A single high-spec server with Redis and a partitioned NoSQL Key-Value store (or PostgreSQL with B-tree index) can easily hold all 15TB of data and 38GB of RAM cache.'
+      conclusion: 'These numbers are small for modern hardware. A Redis cluster with about 33 GB of memory serves most redirects. A key-value database sharded by short_key, such as DynamoDB or Cassandra (or PostgreSQL with a B-tree index on the key), stores the 9 TB. The hard parts are not size but key generation, latency and availability.'
     },
     architecture: {
-      summary: 'Clients query Anycast DNS -> Edge CDN/Cloudflare (handles cached 301 redirects) -> Layer 7 Load Balancer -> Stateless Web Servers -> Key Generation Service (Pre-allocated token ranges via ZooKeeper/etcd) -> Redis Cache Cluster -> Partitioned Key-Value Database (DynamoDB / Cassandra) -> Async Kafka Event Stream for Analytics Workers.',
+      summary: 'A click first reaches the nearest CDN edge through Anycast DNS, and the CDN can answer cached 301 redirects by itself. Other requests go through a Layer 7 load balancer to stateless API servers. To redirect, a server reads the key from Redis and falls back to the key-value database (DynamoDB or Cassandra) on a miss. To create a link, a server takes the next ID from a block of IDs that the Key Generation Service reserved for it in ZooKeeper or etcd. Click events go to Kafka and analytics workers process them later, so the redirect never waits for analytics.',
       nodes: [
-        { id: 'client', label: 'Web / Mobile Clients', type: 'client', x: 8, y: 50, description: 'Initiates short link creation or redirect requests' },
-        { id: 'dns_cdn', label: 'DNS & Edge CDN', type: 'cdn', x: 24, y: 50, description: 'Caches HTTP 301 permanent redirects at edge PoPs', techStack: ['Cloudflare', 'Anycast'] },
-        { id: 'lb', label: 'Load Balancer (L7)', type: 'load_balancer', x: 40, y: 50, description: 'Routes traffic to stateless application clusters', techStack: ['Envoy', 'AWS ALB'] },
-        { id: 'app_srv', label: 'URL Shortener API Service', type: 'service', x: 58, y: 50, description: 'Handles encoding, validation, and redirection logic', techStack: ['Go', 'Node.js'] },
-        { id: 'redis', label: 'Redis Cache Cluster', type: 'cache', x: 76, y: 25, description: 'Stores hot short_key -> long_url mappings with LRU eviction', techStack: ['Redis 7 Cluster'], scaleMetric: '38 GB RAM, 95% Hit Ratio' },
-        { id: 'db', label: 'Key-Value Database', type: 'database', x: 76, y: 75, description: 'Durable primary store for all URL records sharded by short_key', techStack: ['DynamoDB', 'PostgreSQL'], scaleMetric: '15 TB across 5 shards' },
-        { id: 'kgs', label: 'Key Generation Service (KGS)', type: 'worker', x: 58, y: 15, description: 'Pre-generates random base62 keys using distributed ranges', techStack: ['etcd', 'Raft'] },
-        { id: 'kafka', label: 'Kafka Analytics Stream', type: 'queue', x: 58, y: 85, description: 'Asynchronously buffers click events (IP, timestamp, user agent)', techStack: ['Apache Kafka'] },
-        { id: 'click_worker', label: 'Analytics Aggregator', type: 'worker', x: 76, y: 92, description: 'Consumes click stream and updates ClickHouse OLAP', techStack: ['ClickHouse'] }
+        { id: 'client', label: 'Web / Mobile Clients', type: 'client', x: 8, y: 50, description: 'Create short links and follow them' },
+        { id: 'dns_cdn', label: 'DNS & Edge CDN', type: 'cdn', x: 24, y: 50, description: 'Nearest edge server. It can answer cached 301 redirects without calling the origin.', techStack: ['Cloudflare', 'Anycast'] },
+        { id: 'lb', label: 'Load Balancer (L7)', type: 'load_balancer', x: 40, y: 50, description: 'Spreads requests over the stateless API servers', techStack: ['Envoy', 'AWS ALB'] },
+        { id: 'app_srv', label: 'URL Shortener API Service', type: 'service', x: 58, y: 50, description: 'Creates keys, checks input and answers redirects', techStack: ['Go', 'Node.js'] },
+        { id: 'redis', label: 'Redis Cache Cluster', type: 'cache', x: 76, y: 25, description: 'Keeps hot short_key to long_url mappings in memory and evicts the least recently used (LRU) entries', techStack: ['Redis 7 Cluster'], scaleMetric: '33 GB RAM, ~95% Hit Ratio' },
+        { id: 'db', label: 'Key-Value Database', type: 'database', x: 76, y: 75, description: 'Durable store for every link, sharded by short_key', techStack: ['DynamoDB', 'PostgreSQL'], scaleMetric: '9 TB (3 TB × 3 replicas)' },
+        { id: 'kgs', label: 'Key Generation Service (KGS)', type: 'worker', x: 58, y: 15, description: 'Gives each API server its own block of unused IDs and records it in etcd, so no block is handed out twice', techStack: ['etcd', 'Raft'] },
+        { id: 'kafka', label: 'Kafka Analytics Stream', type: 'queue', x: 58, y: 85, description: 'Buffers click events (IP, time, user agent) so the redirect does not wait for them', techStack: ['Apache Kafka'] },
+        { id: 'click_worker', label: 'Analytics Aggregator', type: 'worker', x: 76, y: 92, description: 'Reads click events and writes totals to ClickHouse for analytics queries', techStack: ['ClickHouse'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'dns_cdn', label: '1. GET /a9x3z1', protocol: 'HTTPS' },
@@ -78,31 +80,31 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
         { id: 'e8', from: 'kafka', to: 'click_worker', label: 'Stream Processing', protocol: 'Internal RPC', isAsync: true }
       ],
       flowSteps: [
-        { step: 1, title: 'Client Request Received', description: 'User clicks https://tiny.cc/a9x3z1. The request reaches the nearest Edge CDN node.', activeNodes: ['client', 'dns_cdn'], highlightDetails: 'If CDN has cached 301 redirect, it immediately returns Location header (0ms origin load).', latencyEstimate: '5-10ms' },
-        { step: 2, title: 'Load Balancer Routing', description: 'CDN misses and proxies request to the L7 Load Balancer, which routes to a healthy App Server instance.', activeNodes: ['dns_cdn', 'lb', 'app_srv'], highlightDetails: 'Stateless servers allow auto-scaling based on CPU & connection metrics.', latencyEstimate: '2ms' },
-        { step: 3, title: 'In-Memory Cache Lookup', description: 'App server queries Redis Cluster using short key a9x3z1.', activeNodes: ['app_srv', 'redis'], highlightDetails: '95%+ hit ratio thanks to temporal locality (Pareto 80/20 rule).', latencyEstimate: '1-2ms' },
-        { step: 4, title: 'Database Fallback (On Miss)', description: 'If cache miss, server queries DynamoDB / PostgreSQL using short_key as primary hash key.', activeNodes: ['app_srv', 'db'], highlightDetails: 'Result is populated back into Redis with TTL + Jitter.', latencyEstimate: '5-10ms' },
-        { step: 5, title: 'Async Click Event Emitted', description: 'Server publishes click metadata (timestamp, geo, referrer) to Kafka and immediately sends HTTP 302/301 redirect to client.', activeNodes: ['app_srv', 'kafka', 'client'], highlightDetails: 'Analytics logging is non-blocking to keep redirection snappy.', latencyEstimate: '1ms' }
+        { step: 1, title: 'Request reaches the edge', description: 'A user clicks https://tiny.cc/a9x3z1. The request goes to the nearest CDN edge server.', activeNodes: ['client', 'dns_cdn'], highlightDetails: 'If the edge has a cached 301 for this key, it answers at once with the Location header. The origin does no work.', latencyEstimate: '5-10ms' },
+        { step: 2, title: 'Load balancer picks a server', description: 'On a CDN miss, the request goes to the Layer 7 load balancer, which sends it to a healthy API server.', activeNodes: ['dns_cdn', 'lb', 'app_srv'], highlightDetails: 'The API servers keep no state, so you can add or remove them freely as CPU use and connections change.', latencyEstimate: '2ms' },
+        { step: 3, title: 'Look up the key in Redis', description: 'The API server reads the key a9x3z1 from Redis.', activeNodes: ['app_srv', 'redis'], highlightDetails: 'About 95% of lookups hit the cache, because a small set of popular links gets most of the clicks.', latencyEstimate: '1-2ms' },
+        { step: 4, title: 'Read the database on a miss', description: 'On a cache miss, the server reads the link from the database by its primary key, short_key.', activeNodes: ['app_srv', 'db'], highlightDetails: 'The server then writes the result into Redis with a TTL plus a small random offset (jitter), so many keys do not expire at the same moment.', latencyEstimate: '5-10ms' },
+        { step: 5, title: 'Log the click and redirect', description: 'The server sends the click details (time, country, referrer) to Kafka and at once returns the 302 or 301 redirect.', activeNodes: ['app_srv', 'kafka', 'client'], highlightDetails: 'Logging does not block the redirect, so analytics never slows down users.', latencyEstimate: '1ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/api/v1/urls',
-        description: 'Shorten a long URL',
+        description: 'Create a short link',
         requestBody: '{\n  "long_url": "https://example.com/very/long/path",\n  "custom_alias": "my-promo-link",\n  "expire_at": 1780000000\n}',
         responseBody: '{\n  "short_url": "https://tiny.cc/my-promo-link",\n  "short_key": "my-promo-link",\n  "created_at": 1724000000\n}'
       },
       {
         method: 'GET',
         path: '/{short_key}',
-        description: 'Redirect to target destination',
+        description: 'Redirect to the long URL',
         responseBody: 'HTTP 302 Found\nLocation: https://example.com/very/long/path'
       },
       {
         method: 'GET',
         path: '/api/v1/urls/{short_key}/analytics',
-        description: 'Retrieve click statistics',
+        description: 'Get click statistics for a link',
         responseBody: '{\n  "total_clicks": 142850,\n  "top_countries": [{"country": "US", "count": 82000}],\n  "referrers": [{"source": "twitter.com", "count": 64000}]\n}'
       }
     ],
@@ -112,13 +114,13 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
         type: 'NoSQL Key-Value',
         shardingKey: 'short_key',
         fields: [
-          { name: 'short_key', type: 'VARCHAR(8)', isPrimary: true, notes: 'Base62 encoded unique identifier (Hash Key)' },
-          { name: 'original_url', type: 'VARCHAR(2048)', notes: 'Destination destination address' },
-          { name: 'user_id', type: 'UUID', isIndex: true, notes: 'Creator account ID' },
-          { name: 'created_at', type: 'BIGINT', notes: 'Epoch timestamp' },
-          { name: 'expire_at', type: 'BIGINT', isIndex: true, notes: 'Expiration timestamp for TTL cleanup' }
+          { name: 'short_key', type: 'VARCHAR(8)', isPrimary: true, notes: 'Base62 key, unique (hash key)' },
+          { name: 'original_url', type: 'VARCHAR(2048)', notes: 'The long URL to redirect to' },
+          { name: 'user_id', type: 'UUID', isIndex: true, notes: 'Account that created the link' },
+          { name: 'created_at', type: 'BIGINT', notes: 'Creation time (Unix epoch)' },
+          { name: 'expire_at', type: 'BIGINT', isIndex: true, notes: 'Expiry time, used by TTL cleanup' }
         ],
-        notes: 'Sharded horizontally by MD5(short_key). 15TB total dataset.'
+        notes: 'Sharded by a hash of short_key, so keys spread evenly over the shards. About 9 TB including replicas.'
       },
       {
         tableName: 'url_clicks_daily',
@@ -131,61 +133,62 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
           { name: 'country_code', type: 'CHAR(2)' },
           { name: 'referrer', type: 'VARCHAR(255)' }
         ],
-        notes: 'Stored in ClickHouse or Cassandra for fast aggregation.'
+        notes: 'Daily click totals per link. Stored in ClickHouse or Cassandra for fast aggregation.'
       }
     ],
     deepDives: [
       {
-        title: 'Key Generation: MD5 vs Base62 vs Pre-Allocated KGS Token Ranges',
-        subtitle: 'How to avoid hash collisions and database write locks',
-        content: `Generating a 7-character string using Base62 (a-z, A-Z, 0-9) yields 62^7 ≈ 3.52 Trillion unique URLs, which is more than enough for decades of writes.\n\nThree Approaches:\n1. Hash & Truncate (e.g. MD5(long_url) -> take first 7 chars): High probability of hash collision. Requires querying the DB to check if the key already exists (expensive read-before-write).\n2. Centralized Auto-Increment ID + Base62: Convert a 64-bit integer ID to Base62. Single SQL auto-increment creates a massive write bottleneck.\n3. Distributed Key Generation Service (KGS) with Range Allocation (The Best Pattern): A dedicated service (backed by ZooKeeper or etcd) pre-generates unique 64-bit ID ranges in memory (e.g. Server 1 gets IDs 1,000,000 to 1,999,999; Server 2 gets 2,000,000 to 2,999,999). Each app server encodes its assigned sequence number into Base62 locally without any network locks or DB checks!`,
+        title: 'Key generation: hashing, a global counter, or reserved ID blocks',
+        subtitle: 'How to create unique short keys without collisions or a write bottleneck',
+        content: `Base62 uses 62 characters (a-z, A-Z, 0-9). A 7-character Base62 key gives 62^7 ≈ 3.52 trillion possible keys. At 100 million new links per month, that lasts about 2,900 years.\n\nThere are three common ways to create the key:\n1. Hash and cut. Hash the long URL (for example with MD5) and keep the first 7 characters. Different URLs can produce the same 7 characters (a collision), so every write must first check the database and retry on a clash. That read-before-write is slow under load.\n2. One global counter. Use a database auto-increment ID and convert it to Base62. Keys are unique, but every write in the system goes through one counter, which becomes a bottleneck and a single point of failure.\n3. Reserved ID blocks (recommended). A Key Generation Service, backed by ZooKeeper or etcd, gives each API server its own block of IDs. For example, server 1 gets 1,000,000 to 1,999,999 and server 2 gets 2,000,000 to 2,999,999. Each server counts through its block in memory and converts each number to Base62. There are no locks, network calls or database checks per write.`,
         keyTakeaways: [
-          'Pre-allocated ranges eliminate write locks and collision retries completely.',
-          'If a server crashes, its unused pre-allocated IDs are simply skipped (negligible loss in a 3.5 Trillion pool).',
-          'Base62 encoding is URL-safe and does not require escape characters.'
+          'Reserved ID blocks remove locks and collision retries.',
+          'If a server crashes, the rest of its block is never used. That waste is tiny compared with 3.5 trillion keys.',
+          'Base62 keys are safe in URLs and need no escaping.',
+          'Counter values come out in order. Scramble each ID before encoding it (see the practice questions) so keys cannot be guessed.'
         ],
         tradeoffs: {
-          optionA: 'MD5 Hash with Collision Retries',
-          optionB: 'Pre-Allocated Distributed Range KGS',
-          prosA: ['Same long URL produces same short URL naturally'],
-          prosB: ['Zero collision checks, O(1) lock-free key generation, scales infinitely'],
-          decision: 'KGS Range Allocation is superior for high concurrency.'
+          optionA: 'Hash the URL and retry on collision',
+          optionB: 'Reserved ID blocks from a key service',
+          prosA: ['The same long URL always gets the same short key, so duplicate links are easy to detect.'],
+          prosB: ['No collision checks and no locks. Each key costs O(1) work, and capacity grows by adding servers.'],
+          decision: 'Use reserved ID blocks when many servers create links at the same time.'
         }
       },
       {
-        title: 'HTTP 301 Permanent Redirect vs HTTP 302 Temporary Redirect',
-        subtitle: 'Balancing client caching vs server analytics visibility',
-        content: `Choosing between 301 and 302 is a critical system design interview topic:\n- HTTP 301 (Moved Permanently): Browsers and Edge CDNs cache the redirection locally. Subsequent clicks go directly to target URL without hitting your shortener server. Result: Minimum latency for users, zero server load, BUT you lose the ability to track click analytics on repeat visits.\n- HTTP 302 (Found / Temporary Redirect): Browser always queries your shortener server on every click. Result: 100% accurate click analytics and tracking, at the cost of slightly higher server traffic.\n\nRecommended Hybrid Architecture: Return HTTP 302 by default for analytics fidelity, with a short Cache-Control: max-age=300 header to prevent browser DDoS while keeping stats fresh.`,
+        title: 'HTTP 301 vs HTTP 302 redirects',
+        subtitle: 'Fewer requests to your servers, or accurate click counts',
+        content: `The status code decides who remembers the redirect.\n- 301 (Moved Permanently): browsers and CDNs cache the redirect. Later clicks go straight to the long URL without reaching your servers. Latency and server load are lowest, but you cannot count those repeat clicks.\n- 302 (Found, a temporary redirect): browsers ask your service on every click, unless a cache header allows reuse. Every click can be counted, at the cost of more traffic.\n\nA common middle path is to return 302 with a short Cache-Control: max-age=300 header. A browser that opens the same link again within 5 minutes reuses the answer, which protects your servers from rapid repeat clicks. You still see each visitor at least once every 5 minutes.`,
         keyTakeaways: [
-          'Use 301 when infrastructure cost is primary priority and analytics are not monetized.',
-          'Use 302 when detailed attribution, fraud monitoring, or real-time analytics are required.'
+          'Use 301 when infrastructure cost matters most and per-click analytics do not.',
+          'Use 302 when you need accurate attribution, fraud checks or real-time analytics.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Hot URL Sudden Spikes (e.g. Viral Super Bowl tweet)',
-        impact: 'A single key gets 100,000 reads/sec, overloading a single Redis cache node (Hot Key Problem).',
-        mitigation: 'Implement Local In-Memory Cache (e.g. Caffeine/LRU) directly on API web nodes for 10-30 seconds, or replicate hot keys across Redis shards using key suffix hashing (key:1, key:2).'
+        bottleneck: 'A link suddenly goes viral (for example a Super Bowl tweet)',
+        impact: 'One key gets 100,000 reads per second. All of them land on the single Redis node that owns the key (a hot key), and that node overloads.',
+        mitigation: 'Keep a small in-process LRU cache (for example Caffeine) on each API server for 10 to 30 seconds. Or copy the hot key to several Redis shards under suffixed names (key:1, key:2, and so on) and pick one at random on each read.'
       },
       {
-        bottleneck: 'Expired URLs Accumulation',
-        impact: 'Database grows unbounded with dead links, degrading index efficiency and wasting storage.',
-        mitigation: 'Use TTL features native to NoSQL (DynamoDB TTL automatically purges expired records at zero read unit cost) + asynchronous daily sweeping batch jobs.'
+        bottleneck: 'Expired links pile up',
+        impact: 'The database keeps growing with dead links, which wastes storage and makes indexes slower.',
+        mitigation: 'Use the database TTL feature: DynamoDB TTL deletes expired items in the background without using write capacity. Deletion can lag by days, so also check expire_at on every read. A daily batch job can clean up stores that have no TTL feature.'
       }
     ],
     interviewQA: [
       {
         question: 'How do you prevent malicious users from guessing consecutive short URLs?',
-        hint: 'Sequential Base62 IDs are predictable.',
-        goodAnswer: 'Instead of linear Base62 encoding, pass the sequential ID through a deterministic Feistel cipher or multiplicative inverse (Fletcher-like hash) to scramble the bits before Base62 encoding, making consecutive IDs appear completely random.',
-        pitfalls: 'Suggesting slow random string generation loops with DB duplicate checks.'
+        hint: 'Keys made from a counter come out in order.',
+        goodAnswer: 'Scramble the counter value before encoding it. Pass the ID through a reversible permutation, for example a small Feistel cipher with a secret key, or multiply it by a large secret number that shares no factor with 62^7 and take the result modulo 62^7. Every ID still maps to exactly one key, so keys stay unique, but neighboring IDs produce keys that look random.',
+        pitfalls: 'Generating random strings in a loop and checking the database for duplicates each time. It is slow, and it gets slower as the key space fills up.'
       },
       {
         question: 'How do you support custom vanity URLs (e.g., tiny.cc/my-brand)?',
-        hint: 'Custom aliases can collide with system-generated IDs.',
-        goodAnswer: 'Store custom aliases in the same database table with short_key as primary key. Check for existence using a fast Redis SET or Bloom Filter. If available, insert into DB with a reserved flag.',
-        pitfalls: 'Creating a separate table that requires double querying on every redirect.'
+        hint: 'A custom alias can clash with a key the system already created or will create later.',
+        goodAnswer: 'Store custom aliases in the same table, with short_key as the primary key, so a redirect still needs only one lookup. Check that the alias is free with a fast Redis set or a Bloom filter, then insert it with a conditional write (insert only if the key does not exist), so two users cannot claim it at the same time. To avoid clashes with generated keys, give aliases a different shape, for example require a hyphen, which Base62 keys never contain.',
+        pitfalls: 'Putting aliases in a separate table, so every redirect has to check two tables.'
       }
     ],
     similarSystems: ['Bitly', 'Dub.co', 'Ow.ly', 'Rebrandly'],
@@ -195,62 +198,62 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
     id: 'twitter-newsfeed',
     title: 'Design Twitter / X Timeline & News Feed',
     slug: 'twitter-news-feed',
-    tagline: 'High-throughput social timeline generation supporting millions of concurrent reads, fanout-on-write, and the celebrity problem.',
+    tagline: 'Build a home timeline that loads fast for hundreds of millions of readers, even when one account has over 100 million followers.',
     category: 'Social & Content',
     difficulty: 'Intermediate',
     readTime: '22 min read',
     scaleSummary: {
       dau: '300 Million Daily Active Users',
       qps: '350,000 Read QPS (Timeline) / 35,000 Write QPS (Tweets)',
-      storage: '40 TB / day (Tweets + Media Metadata)',
+      storage: '100 GB / day (Tweets + Media Metadata)',
       bandwidth: '70 GB/s Egress / 3.5 GB/s Ingress'
     },
-    overview: 'Twitter allows users to post 280-character tweets, follow other users, and view a personalized Home Timeline of recent tweets from everyone they follow. The system must render feeds in under 100ms despite extreme write fanout and celebrity accounts with 100M+ followers.',
+    overview: 'Users post tweets of up to 280 characters, follow other users, and read a Home Timeline: a list of recent tweets from the accounts they follow. The hard part is that one tweet must show up in the timelines of all of its author\'s followers. For an account with over 100 million followers, that is a huge amount of work. The goal is to render a timeline in under 100 ms (P99, the slowest 1% of requests).',
     keyChallenges: [
-      'Fanout Write Amplification: A celebrity posting a tweet triggers 100M timeline cache updates',
-      'Timeline Materialization: Choosing between Fanout-on-Write (Push) vs Fanout-on-Read (Pull) vs Hybrid',
-      'Snowflake Distributed ID Generation: Generating 64-bit k-sorted unique IDs across datacenters',
-      'High Availability and Partition Tolerance under massive live event spikes (e.g. World Cup, Elections)'
+      'Write amplification: one tweet from a celebrity would mean 100 million timeline updates.',
+      'Choosing how to build timelines: fanout-on-write (push), fanout-on-read (pull), or a hybrid of both.',
+      'Creating unique, time-ordered 64-bit IDs on many servers and in many data centers (Snowflake IDs).',
+      'Staying available during sudden traffic spikes such as a World Cup final or an election.'
     ],
     functionalRequirements: [
-      'Users can post new tweets (text, images, video links)',
-      'Users can follow and unfollow other users',
-      'Users can view their Home Timeline (reverse chronological or ranked tweets from followed accounts)',
-      'Users can view a User Timeline (tweets posted by a specific user)'
+      'Post a tweet (text, images, video links).',
+      'Follow and unfollow other users.',
+      'View the Home Timeline: tweets from followed accounts, newest first or ranked.',
+      'View a User Timeline: the tweets posted by one account.'
     ],
     nonFunctionalRequirements: [
-      'Home Timeline rendering latency < 100ms at P99',
-      'Tweet posting latency < 500ms',
-      'High Availability (99.99%) with graceful degradation during outages',
-      'Eventual Consistency acceptable for timeline updates (within 2-5 seconds)'
+      'Latency: Home Timeline in under 100 ms at P99. Posting a tweet in under 500 ms.',
+      'Availability: 99.99%. When part of the system fails, show a slightly stale or smaller timeline instead of an error.',
+      'Consistency: eventual consistency is fine. A new tweet may take 2 to 5 seconds to reach follower timelines.'
     ],
-    outOfScope: ['Live Video Streaming', 'Direct Messaging E2EE', 'Ad Auction Bidding Engine'],
+    outOfScope: ['Live video streaming.', 'End-to-end encrypted direct messages.', 'The ad auction.'],
     capacityEstimations: {
       assumptions: [
-        '300M DAU; each user checks Home Timeline 5 times/day = 1.5B reads/day (~17,400 QPS avg, 350,000 peak QPS)',
-        '100M tweets posted/day (~1,160 QPS avg, 35,000 peak QPS)',
-        'Average follower count: 200 followers per user; Celebrities: up to 150M followers'
+        '300M daily active users, each opening the Home Timeline 5 times a day: 1.5B reads/day. That is about 17,400 reads/s on average and 350,000 reads/s at peak.',
+        '100M tweets per day: about 1,160 writes/s on average and 35,000 writes/s at peak.',
+        'The average user has 200 followers. The biggest accounts have up to 150M.',
+        'A tweet record is about 1 KB (text and metadata; media files are stored elsewhere). That is 100 GB/day for one copy, before replication.'
       ],
       metrics: [
-        { label: 'Timeline Read QPS', value: '350,000 QPS', formula: '1.5B reads / 86,400 * 20x peak burst factor', description: 'Peak home timeline requests' },
-        { label: 'Tweet Write QPS', value: '35,000 QPS', formula: '100M tweets / 86,400 * 30x peak event factor', description: 'Peak tweet creations' },
-        { label: 'Home Timeline Cache Size', value: '240 GB RAM', formula: '300M users * 800 tweet IDs * 8 bytes (Active users only)', description: 'Redis timeline memory for active users' }
+        { label: 'Timeline Read QPS', value: '350,000 QPS', formula: '1.5B reads / 86,400 * 20x peak burst factor', description: 'Peak Home Timeline requests per second' },
+        { label: 'Tweet Write QPS', value: '35,000 QPS', formula: '100M tweets / 86,400 * 30x peak event factor', description: 'Peak tweet creations per second' },
+        { label: 'Home Timeline Cache Size', value: '1.92 TB RAM', formula: '300M daily active users * 800 tweet IDs * 8 bytes', description: 'Redis memory to hold the latest 800 tweet IDs for every daily active user' }
       ],
-      conclusion: 'A hybrid Fanout model with Redis in-memory timeline lists is required to satisfy the sub-100ms timeline read latency SLA.'
+      conclusion: 'Reading a timeline must be a single fast lookup, so the system keeps ready-made timelines in Redis. A pure push design cannot handle celebrity accounts, so it uses a hybrid: push for ordinary accounts, pull for celebrities.'
     },
     architecture: {
-      summary: 'Clients communicate via CDN & Load Balancers to Tweet Ingestion Service and Timeline Service. Tweets are assigned 64-bit Snowflake IDs and written to Cassandra and Redis. The Fanout Service determines whether to Push to followers Redis Timeline lists or Pull dynamically for celebrities.',
+      summary: 'Clients reach the Tweet Ingestion Service and the Timeline Service through a load balancer. The Tweet Service gets a 64-bit Snowflake ID and saves the tweet in Cassandra. It then queues a fanout job. Fanout workers push the tweet ID into follower timelines in Redis, except for celebrity authors. When a user opens the app, the Timeline Service reads the ready-made list from Redis and adds recent tweets from followed celebrities.',
       nodes: [
-        { id: 'client', label: 'Mobile & Web Clients', type: 'client', x: 8, y: 50, description: 'Post tweets and scroll timeline' },
-        { id: 'lb', label: 'Layer 7 Load Balancer', type: 'load_balancer', x: 26, y: 50, description: 'Distributes traffic with TLS termination', techStack: ['Envoy', 'Nginx'] },
-        { id: 'tweet_service', label: 'Tweet Ingestion Service', type: 'service', x: 45, y: 30, description: 'Validates tweets and writes to storage', techStack: ['Java / Scala'] },
-        { id: 'timeline_service', label: 'Timeline Query Service', type: 'service', x: 45, y: 70, description: 'Fetches and hydrates user timelines', techStack: ['Go / Netty'] },
-        { id: 'snowflake', label: 'Snowflake ID Generator', type: 'worker', x: 45, y: 10, description: 'Generates 64-bit time-ordered IDs', techStack: ['Twitter Snowflake'] },
-        { id: 'fanout_queue', label: 'Fanout Message Queue', type: 'queue', x: 65, y: 30, description: 'Buffers fanout tasks for async workers', techStack: ['Kafka'] },
-        { id: 'fanout_workers', label: 'Fanout Worker Cluster', type: 'worker', x: 82, y: 30, description: 'Updates Redis timeline lists for regular users', techStack: ['Go Workers'] },
-        { id: 'timeline_cache', label: 'Timeline Redis Cluster', type: 'cache', x: 65, y: 70, description: 'Stores user_id -> [tweet_ids] lists (800 items)', techStack: ['Redis Cluster'], scaleMetric: '240 GB RAM' },
-        { id: 'tweet_db', label: 'Tweet Store (Cassandra)', type: 'database', x: 82, y: 70, description: 'Durable write-optimized tweet storage', techStack: ['Apache Cassandra / ScyllaDB'] },
-        { id: 'social_graph', label: 'Social Graph DB (Followers)', type: 'database', x: 65, y: 10, description: 'Indexes follow relationships', techStack: ['FlockDB / PostgreSQL'] }
+        { id: 'client', label: 'Mobile & Web Clients', type: 'client', x: 8, y: 50, description: 'Post tweets and scroll the timeline' },
+        { id: 'lb', label: 'Layer 7 Load Balancer', type: 'load_balancer', x: 26, y: 50, description: 'Spreads requests over servers and ends TLS (HTTPS encryption)', techStack: ['Envoy', 'Nginx'] },
+        { id: 'tweet_service', label: 'Tweet Ingestion Service', type: 'service', x: 45, y: 30, description: 'Validates new tweets and saves them', techStack: ['Java / Scala'] },
+        { id: 'timeline_service', label: 'Timeline Query Service', type: 'service', x: 45, y: 70, description: 'Reads a timeline and fills in the full tweet data (hydration)', techStack: ['Go / Netty'] },
+        { id: 'snowflake', label: 'Snowflake ID Generator', type: 'worker', x: 45, y: 10, description: 'Creates unique 64-bit IDs that sort by time', techStack: ['Twitter Snowflake'] },
+        { id: 'fanout_queue', label: 'Fanout Message Queue', type: 'queue', x: 65, y: 30, description: 'Holds fanout jobs until a worker is free', techStack: ['Kafka'] },
+        { id: 'fanout_workers', label: 'Fanout Worker Cluster', type: 'worker', x: 82, y: 30, description: 'Adds new tweet IDs to follower timelines in Redis', techStack: ['Go Workers'] },
+        { id: 'timeline_cache', label: 'Timeline Redis Cluster', type: 'cache', x: 65, y: 70, description: 'Keeps a list of the latest 800 tweet IDs for each user (user_id to tweet IDs)', techStack: ['Redis Cluster'], scaleMetric: '1.92 TB RAM' },
+        { id: 'tweet_db', label: 'Tweet Store (Cassandra)', type: 'database', x: 82, y: 70, description: 'Durable storage for every tweet, built for heavy writes', techStack: ['Apache Cassandra / ScyllaDB'] },
+        { id: 'social_graph', label: 'Social Graph DB (Followers)', type: 'database', x: 65, y: 10, description: 'Stores who follows whom', techStack: ['FlockDB / PostgreSQL'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'lb', label: 'HTTPS API', protocol: 'HTTPS' },
@@ -261,15 +264,15 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
         { id: 'e6', from: 'tweet_service', to: 'fanout_queue', label: 'Publish Fanout Event', protocol: 'Async Queue', isAsync: true },
         { id: 'e7', from: 'fanout_queue', to: 'fanout_workers', label: 'Consume Job', protocol: 'Internal RPC', isAsync: true },
         { id: 'e8', from: 'fanout_workers', to: 'social_graph', label: 'Fetch Followers', protocol: 'SQL' },
-        { id: 'e9', from: 'fanout_workers', to: 'timeline_cache', label: 'RPUSH tweet_id', protocol: 'TCP' },
+        { id: 'e9', from: 'fanout_workers', to: 'timeline_cache', label: 'LPUSH tweet_id', protocol: 'TCP' },
         { id: 'e10', from: 'timeline_service', to: 'timeline_cache', label: 'LRANGE 0 20', protocol: 'TCP' },
         { id: 'e11', from: 'timeline_service', to: 'tweet_db', label: 'Hydrate Tweet Metadata', protocol: 'NoSQL' }
       ],
       flowSteps: [
-        { step: 1, title: 'Tweet Ingestion', description: 'User posts tweet. Tweet Service requests unique 64-bit ID from Snowflake Generator and writes record to Cassandra.', activeNodes: ['client', 'lb', 'tweet_service', 'snowflake', 'tweet_db'], highlightDetails: 'Snowflake ID encodes timestamp directly, allowing natural time-based sorting.', latencyEstimate: '15ms' },
-        { step: 2, title: 'Fanout Evaluation', description: 'Tweet Service publishes event to Kafka. Fanout Workers check author follower count in Social Graph DB.', activeNodes: ['tweet_service', 'fanout_queue', 'fanout_workers', 'social_graph'], highlightDetails: 'If author has < 25,000 followers, proceed to Push. If Celebrity (>25k followers), skip push!', latencyEstimate: '5ms' },
-        { step: 3, title: 'Push Timeline Materialization', description: 'Workers execute LPUSH into each follower Redis timeline list and TRIM to keep the latest 800 tweet IDs.', activeNodes: ['fanout_workers', 'timeline_cache'], highlightDetails: 'Pipelined Redis commands write up to 10,000 lists in parallel.', latencyEstimate: '50-200ms' },
-        { step: 4, title: 'Timeline Query & Hybrid Merge', description: 'When a user opens app, Timeline Service fetches cached tweet IDs from Redis, plus queries tweets from followed celebrities (Pull model), and merges them in memory.', activeNodes: ['client', 'timeline_service', 'timeline_cache', 'tweet_db'], highlightDetails: 'K-way merge on timestamp delivers personalized feed in < 30ms.', latencyEstimate: '25ms' }
+        { step: 1, title: 'Save the tweet', description: 'A user posts a tweet. The Tweet Service gets a unique 64-bit ID from the Snowflake generator and writes the tweet to Cassandra.', activeNodes: ['client', 'lb', 'tweet_service', 'snowflake', 'tweet_db'], highlightDetails: 'A Snowflake ID starts with a timestamp, so sorting by ID also sorts by time.', latencyEstimate: '15ms' },
+        { step: 2, title: 'Decide how to fan out', description: 'The Tweet Service publishes an event to Kafka. A fanout worker looks up the author\'s follower count in the Social Graph DB.', activeNodes: ['tweet_service', 'fanout_queue', 'fanout_workers', 'social_graph'], highlightDetails: 'Below a follower threshold (for example 25,000), push the tweet to followers. Above it, skip the push. The threshold is a tuning choice, not a fixed rule.', latencyEstimate: '5ms' },
+        { step: 3, title: 'Push to follower timelines', description: 'The worker adds the tweet ID to the front of each follower\'s Redis list (LPUSH) and trims the list to the latest 800 IDs (LTRIM).', activeNodes: ['fanout_workers', 'timeline_cache'], highlightDetails: 'Workers batch many Redis commands into one network round trip (pipelining) and handle many follower lists at once.', latencyEstimate: '50-200ms' },
+        { step: 4, title: 'Read and merge', description: 'When a user opens the app, the Timeline Service reads the cached tweet IDs from Redis. It also fetches recent tweets from the celebrities that user follows, then merges both lists by time.', activeNodes: ['client', 'timeline_service', 'timeline_cache', 'tweet_db'], highlightDetails: 'Both lists are already sorted by time, so the merge is cheap and happens in memory. The service then loads the full tweet data for the top results.', latencyEstimate: '25ms' }
       ]
     },
     apiDesign: [
@@ -283,7 +286,7 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
       {
         method: 'GET',
         path: '/api/v2/timeline/home',
-        description: 'Fetch user home timeline with pagination cursor',
+        description: 'Get the Home Timeline, one page at a time (the cursor marks where the next page starts)',
         responseBody: '{\n  "tweets": [\n    {\n      "id": "189283748291039485",\n      "author_id": "usr_42",\n      "text": "Hello world!",\n      "likes_count": 1204\n    }\n  ],\n  "next_cursor": "189283748291039000"\n}'
       }
     ],
@@ -294,12 +297,12 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
         shardingKey: 'author_id (Partition Key), tweet_id (Clustering Key DESC)',
         fields: [
           { name: 'author_id', type: 'UUID', isPrimary: true },
-          { name: 'tweet_id', type: 'BIGINT', isPrimary: true, notes: 'Snowflake ID (time-ordered)' },
+          { name: 'tweet_id', type: 'BIGINT', isPrimary: true, notes: 'Snowflake ID (sorts by time)' },
           { name: 'content', type: 'VARCHAR(280)' },
           { name: 'media_urls', type: 'LIST<VARCHAR>' },
           { name: 'created_at', type: 'TIMESTAMP' }
         ],
-        notes: 'Cassandra cluster storing all historical tweets with fast partition slice queries.'
+        notes: 'Cassandra stores all tweets. Each author is one partition, with tweets sorted newest first, so "latest N tweets by this author" is a fast range read.'
       },
       {
         tableName: 'follows',
@@ -310,47 +313,47 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
           { name: 'followee_id', type: 'UUID', isPrimary: true },
           { name: 'created_at', type: 'TIMESTAMP' }
         ],
-        notes: 'Indexes both (user_id, followee_id) and reverse index (followee_id, user_id).'
+        notes: 'Needs two lookups: who a user follows (user_id, followee_id), and who follows an account (followee_id, user_id). Keep a second index or copy for the reverse direction.'
       }
     ],
     deepDives: [
       {
-        title: 'The Fanout Problem: Push vs Pull vs Hybrid Architecture',
-        subtitle: 'Why pure Push and pure Pull fail at scale',
-        content: `1. Fanout-on-Write (Push Model):\n- When user posts a tweet, the system immediately pushes the tweet ID into all followers' Redis timeline lists.\n- Pros: Reading the timeline is ultra-fast (O(1) Redis LRANGE lookup).\n- Cons: A celebrity with 100M followers (e.g. Elon Musk) triggers 100 Million write operations for a single tweet, overwhelming workers and memory.\n\n2. Fanout-on-Read (Pull Model):\n- When a user opens their timeline, the system dynamically queries tweets from all users they follow, sorts them by timestamp, and returns.\n- Pros: Zero write overhead when tweeting.\n- Cons: Read latency is terrible. If a user follows 2,000 people, the query must hit 2,000 partitions and perform a 2000-way merge at runtime on every refresh.\n\n3. The Hybrid Model (Twitter / Instagram Solution):\n- Regular Users (< 25,000 followers): Use Push (Fanout-on-Write) into followers' Redis caches.\n- Celebrities (> 25,000 followers): Do NOT push. Instead, when a follower requests their timeline, the system does a fast Pull for their followed celebrities' latest tweets and merges them with their pre-computed Redis timeline list.`,
+        title: 'Fanout: push, pull, or hybrid',
+        subtitle: 'Why pure push and pure pull both break at this scale',
+        content: `Fanout means copying one new tweet to every place that needs it. There are two basic ways to do it.\n\n1. Fanout-on-write (push). When a user posts, the system adds the tweet ID to every follower's Redis timeline list right away.\n- Benefit: reading a timeline is one fast Redis lookup.\n- Cost: an account with 100 million followers causes 100 million writes for one tweet. That floods the workers and the cache.\n\n2. Fanout-on-read (pull). When a user opens the app, the system fetches recent tweets from everyone they follow, sorts them, and returns the result.\n- Benefit: posting is cheap, because nothing is copied.\n- Cost: reading is slow. A user who follows 2,000 accounts needs data from up to 2,000 partitions and a merge of 2,000 sorted lists on every refresh.\n\n3. Hybrid (the approach used by Twitter and others).\n- Ordinary accounts (below a follower threshold, for example 25,000): push into follower timelines.\n- Celebrity accounts (above the threshold): do not push. When a follower loads the timeline, the Timeline Service pulls the latest tweets from the celebrities that user follows and merges them with the ready-made list.\n\nThe threshold trades write cost against read cost. A lower threshold means fewer writes but more pulls on every read.`,
         keyTakeaways: [
-          'Hybrid fanout solves the celebrity write explosion while maintaining sub-50ms read latency.',
-          'Active vs Inactive Users: Only materialize timelines for users who logged in within the last 14 days to save 80% Redis RAM.'
+          'The hybrid design avoids the celebrity write explosion and keeps reads fast, because each reader pulls from only a few celebrity accounts.',
+          'Build and keep timelines only for recently active users (for example, users who logged in within the last 14 days). This saves Redis memory. Rebuild an inactive user\'s timeline from the tweet store when they return.'
         ]
       },
       {
-        title: 'Twitter Snowflake 64-bit ID Generation Deep Dive',
-        subtitle: 'Generating 100,000 unique, time-sortable IDs per second across distributed nodes',
-        content: `A 64-bit Snowflake ID consists of:\n- 1 bit: Unused sign bit (always 0)\n- 41 bits: Epoch timestamp in milliseconds (~69 years of lifetime)\n- 10 bits: Machine / Worker node ID (supports 1,024 independent generator nodes across datacenters)\n- 12 bits: Local Sequence number (0 to 4,095 per millisecond per node)\n\nCapacity: 1,024 nodes * 4,096 IDs/ms = 4.19 Million unique IDs per second without any cross-server coordination or locks!`,
+        title: 'Snowflake 64-bit IDs',
+        subtitle: 'Unique, time-sortable IDs from many servers without coordination',
+        content: `A Snowflake ID has 64 bits:\n- 1 bit: unused sign bit (always 0).\n- 41 bits: time in milliseconds since a custom epoch (start date). This lasts about 69 years.\n- 10 bits: machine ID. This allows 1,024 generator nodes.\n- 12 bits: a sequence number that counts 0 to 4,095 within one millisecond on one node.\n\nCapacity: each node can create 4,096 IDs per millisecond, which is about 4.1 million IDs per second per node. With 1,024 nodes, the system can create about 4.2 billion IDs per second. Nodes never need to talk to each other, because each node has its own machine ID.\n\nThe design has one weak point: it trusts the clock. If a node's clock moves backward (for example after an NTP correction), it could repeat an ID. A node must wait, or refuse to issue IDs, until the clock passes the last timestamp it used.`,
         keyTakeaways: [
-          'Naturally k-sorted by creation time, eliminating secondary timestamp indexes.',
-          'NTP clock synchronization with max backward tolerance is required to prevent clock drift duplicates.'
+          'IDs sort by creation time (they are roughly time-ordered across nodes), so no separate timestamp index is needed for ordering.',
+          'Clock handling matters. Detect backward clock jumps and pause ID generation instead of risking duplicates.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Celebrity Retweet Storm',
-        impact: 'Millions of users simultaneously load and like the same tweet.',
-        mitigation: 'Cache the hydrated tweet JSON object in Memcached/Redis clusters with read replicas and local memory tiering.'
+        bottleneck: 'A celebrity tweet gets a huge burst of reads and retweets',
+        impact: 'Millions of users load and like the same tweet at once, so the same rows get hit again and again.',
+        mitigation: 'Cache the full tweet object (a hot key) in Redis or Memcached with read replicas. Add a short-lived in-process cache on each Timeline Service server.'
       },
       {
-        bottleneck: 'Social Graph DB Hotspot',
-        impact: 'Querying followers of an account with 80M followers takes too long for the fanout queue.',
-        mitigation: 'Partition social graph lists into chunks of 10,000 followers and spawn parallel Kafka worker sub-jobs.'
+        bottleneck: 'Reading the follower list of a very large account',
+        impact: 'Fetching 80 million followers as one query is too slow for a fanout worker.',
+        mitigation: 'Split the follower list into chunks of 10,000 and process each chunk as its own Kafka job, so many workers run in parallel. (Accounts above the celebrity threshold skip push, so this mostly helps accounts just below it.)'
       }
     ],
     interviewQA: [
       {
         question: 'Why not use SQL JOINs to build the home timeline on the fly?',
-        hint: 'Consider scale of 350,000 QPS over billions of follow relationships.',
-        goodAnswer: 'A query like SELECT * FROM tweets WHERE author_id IN (SELECT followee_id FROM follows WHERE user_id = ?) ORDER BY created_at DESC LIMIT 20 requires scanning millions of rows across disk-based DB nodes. At 350k QPS, this would instantly lock the database. Pre-computed Redis timeline lists are mandatory.',
-        pitfalls: 'Suggesting adding more SQL read replicas instead of architectural pre-computation.'
+        hint: 'Think about 350,000 timeline reads per second and a very large follow graph.',
+        goodAnswer: 'The query would be SELECT * FROM tweets WHERE author_id IN (SELECT followee_id FROM follows WHERE user_id = ?) ORDER BY created_at DESC LIMIT 20. For a user who follows thousands of accounts, it reads rows from many shards and sorts them, on every request. At 350,000 requests per second, that load would overwhelm the database. Building the timeline ahead of time (push) turns each read into one Redis lookup.',
+        pitfalls: 'Answering "add more read replicas". Replicas add capacity, but each query still does the same expensive work.'
       }
     ],
     similarSystems: ['Facebook News Feed', 'LinkedIn Feed', 'Threads', 'Mastodon'],
@@ -360,7 +363,7 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
     id: 'instagram-photo-sharing',
     title: 'Design Instagram / Photo Sharing Platform',
     slug: 'instagram-architecture',
-    tagline: 'High-throughput photo and stories ingestion, multi-resolution image processing pipelines, and scalable social graph feeds.',
+    tagline: 'Accept photo uploads at scale, turn each one into several sizes in the background, and serve billions of views through a CDN.',
     category: 'Social & Content',
     difficulty: 'Intermediate',
     readTime: '20 min read',
@@ -370,53 +373,54 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
       storage: '100 TB / day of images & videos',
       bandwidth: '250 GB/s Egress / 12.5 GB/s Ingress'
     },
-    overview: 'Instagram allows hundreds of millions of users to upload photos and short videos with filters, follow friends, view explore feeds, and post ephemeral 24-hour Stories. The system requires an asynchronous image transcoding pipeline and petabyte-scale distributed object storage.',
+    overview: 'Users upload photos and short videos, apply filters, follow friends, browse an Explore feed, and post Stories that disappear after 24 hours. The system needs a background pipeline that turns each upload into several image sizes, and object storage that can hold petabytes.',
     keyChallenges: [
-      'Ingesting and transcoding 100M photos/day into multiple resolutions (thumbnails, 1080p, compressed mobile formats)',
-      'Optimizing CDN caching hit ratios to serve 250 GB/s of image downloads globally',
-      'Implementing 24-hour ephemeral Stories with automatic expiration and fast sequential playback',
-      'Feed ranking combining chronological timelines with machine learning engagement scores'
+      'Receiving 100M photos a day and converting each one into several sizes and formats (thumbnail, 1080p, compressed formats for phones).',
+      'Keeping the CDN cache hit ratio high so that 250 GB/s of image downloads mostly never reach the origin.',
+      'Stories that expire after 24 hours and play back one after another without delay.',
+      'Feed ranking that mixes time order with machine-learning engagement scores.'
     ],
     functionalRequirements: [
-      'Upload, crop, filter, and share photos/videos with captions',
-      'User activity feed (photos from followed accounts)',
-      'User profile page displaying uploaded photo grid',
-      'Like, comment, and tag users in photos',
-      'Ephemeral 24-hour Stories with view receipts'
+      'Upload, crop, filter and share photos and videos with captions.',
+      'Show a feed of photos from followed accounts.',
+      'Show a profile page with a grid of the user\'s photos.',
+      'Like, comment on and tag users in photos.',
+      'Post Stories that expire after 24 hours and show who viewed them.'
     ],
     nonFunctionalRequirements: [
-      'Upload completion in < 2 seconds for 5MB photo',
-      'Feed loading latency < 200ms',
-      '99.99% Availability and 99.999999999% (11 9s) photo durability',
-      'Seamless multi-device image rendering with WebP / AVIF adaptive compression'
+      'Upload: finish a 5 MB photo in under 2 seconds on a good connection.',
+      'Feed: load in under 200 ms.',
+      'Availability 99.99%. Durability of 99.999999999% (eleven nines): stored photos are almost never lost.',
+      'Adaptive formats: send WebP or AVIF to devices that support them, and JPEG to the rest.'
     ],
-    outOfScope: ['Live Video Broadcast', 'Direct In-App Shopping Checkout'],
+    outOfScope: ['Live video broadcast.', 'Checkout for in-app shopping.'],
     capacityEstimations: {
       assumptions: [
-        '500M DAU; 100M photos uploaded per day',
-        'Average photo size after processing: 1 MB across all resolutions',
-        'Storage per day = 100M * 1 MB = 100 TB/day (36.5 PB/year)',
-        'Users view 40 photos/day on average = 20 Billion photo views/day (~231,000 QPS avg, 500,000 peak QPS)'
+        '500M daily active users; 100M photos uploaded per day.',
+        'Average size of one photo after processing, across all sizes: 1 MB.',
+        'Storage per day: 100M * 1 MB = 100 TB (36.5 PB per year).',
+        'Each user views 40 photos a day: 20 billion views/day, about 231,000/s on average and 500,000/s at peak.',
+        'All storage figures are one copy, before replication.'
       ],
       metrics: [
-        { label: 'Upload Ingress QPS', value: '25,000 QPS', formula: '100M / 86,400 * 20x peak burst', description: 'Peak photo creation requests' },
-        { label: 'Photo View Egress QPS', value: '500,000 QPS', formula: '20B / 86,400 * 2x peak factor', description: 'Peak photo delivery requests' },
-        { label: 'Annual Storage Growth', value: '36.5 Petabytes', formula: '100 TB/day * 365 days', description: 'Durable AWS S3 / GCS object storage capacity' }
+        { label: 'Upload Ingress QPS', value: '25,000 QPS', formula: '100M / 86,400 * 20x peak burst', description: 'Peak photo uploads per second' },
+        { label: 'Photo View Egress QPS', value: '500,000 QPS', formula: '20B / 86,400 * 2x peak factor', description: 'Peak photo requests per second' },
+        { label: 'Annual Storage Growth', value: '36.5 Petabytes', formula: '100 TB/day * 365 days', description: 'New data per year in object storage such as S3 or GCS' }
       ],
-      conclusion: 'Direct-to-S3 client uploads via pre-signed URLs and a global multi-CDN caching layer are non-negotiable.'
+      conclusion: 'Clients should upload straight to object storage with pre-signed URLs, so upload traffic never passes through the application servers. A CDN should serve the images, so most views never reach the origin.'
     },
     architecture: {
-      summary: 'Clients request Pre-signed S3 URLs -> Direct upload to Object Store -> S3 Event triggers SQS -> Transcoding Workers generate WebP/AVIF thumbnails -> Metadata saved in PostgreSQL/Cassandra -> Hybrid Fanout feed generated into Redis.',
+      summary: 'The client asks the Upload Service for a pre-signed S3 URL and uploads the photo straight to object storage. S3 sends an event to a queue. Workers create the smaller versions (WebP/AVIF), save them to a second bucket, and write the photo record to the database. Feeds are built by fanout into Redis (the same hybrid approach as the Twitter case study). Clients load images through the CDN.',
       nodes: [
-        { id: 'client', label: 'Mobile App (iOS/Android)', type: 'client', x: 8, y: 50, description: 'Uploads media & scrolls visual feed' },
-        { id: 'cdn', label: 'Global Image CDN', type: 'cdn', x: 26, y: 75, description: 'Caches static photo assets at PoPs', techStack: ['Fastly / CloudFront'] },
-        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 26, y: 30, description: 'Auth token verification & rate limiting', techStack: ['Envoy'] },
-        { id: 'upload_srv', label: 'Media Upload Service', type: 'service', x: 45, y: 20, description: 'Generates secure pre-signed S3 upload tokens', techStack: ['Python / Go'] },
-        { id: 's3_raw', label: 'Raw Object Storage (S3)', type: 'storage', x: 65, y: 20, description: 'Receives direct client multipart uploads', techStack: ['AWS S3'] },
-        { id: 'image_queue', label: 'Transcode Task Queue', type: 'queue', x: 82, y: 20, description: 'Buffers image processing jobs', techStack: ['RabbitMQ / SQS'] },
-        { id: 'workers', label: 'Image Processing Workers', type: 'worker', x: 92, y: 40, description: 'Generates 150px, 640px, 1080p WebP assets', techStack: ['C++ libvips / FFmpeg'] },
-        { id: 's3_processed', label: 'Processed Asset Store', type: 'storage', x: 65, y: 50, description: 'Serves optimized photos to CDN origin', techStack: ['AWS S3 Standard'] },
-        { id: 'metadata_db', label: 'Metadata & Graph DB', type: 'database', x: 45, y: 70, description: 'Stores photo records, likes, comments, and follows', techStack: ['PostgreSQL (Sharded) / Cassandra'] }
+        { id: 'client', label: 'Mobile App (iOS/Android)', type: 'client', x: 8, y: 50, description: 'Uploads media and scrolls the photo feed' },
+        { id: 'cdn', label: 'Global Image CDN', type: 'cdn', x: 26, y: 75, description: 'Caches photos on edge servers close to users', techStack: ['Fastly / CloudFront'] },
+        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 26, y: 30, description: 'Checks auth tokens and limits request rates', techStack: ['Envoy'] },
+        { id: 'upload_srv', label: 'Media Upload Service', type: 'service', x: 45, y: 20, description: 'Creates pre-signed S3 upload URLs', techStack: ['Python / Go'] },
+        { id: 's3_raw', label: 'Raw Object Storage (S3)', type: 'storage', x: 65, y: 20, description: 'Receives uploads directly from clients', techStack: ['AWS S3'] },
+        { id: 'image_queue', label: 'Transcode Task Queue', type: 'queue', x: 82, y: 20, description: 'Holds image processing jobs until a worker is free', techStack: ['RabbitMQ / SQS'] },
+        { id: 'workers', label: 'Image Processing Workers', type: 'worker', x: 92, y: 40, description: 'Create 150px, 640px and 1080p versions in WebP', techStack: ['C++ libvips / FFmpeg'] },
+        { id: 's3_processed', label: 'Processed Asset Store', type: 'storage', x: 65, y: 50, description: 'Holds the finished images. This is the CDN origin.', techStack: ['AWS S3 Standard'] },
+        { id: 'metadata_db', label: 'Metadata & Graph DB', type: 'database', x: 45, y: 70, description: 'Stores photo records, likes, comments and follows', techStack: ['PostgreSQL (Sharded) / Cassandra'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'gateway', label: '1. Request Upload URL', protocol: 'HTTPS' },
@@ -430,24 +434,24 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
         { id: 'e9', from: 'cdn', to: 's3_processed', label: 'Origin Fetch on Miss', protocol: 'HTTPS' }
       ],
       flowSteps: [
-        { step: 1, title: 'Presigned Upload Authorization', description: 'Client asks API Gateway for an upload token. Media service validates user quota and issues signed S3 URL with 15-min TTL.', activeNodes: ['client', 'gateway', 'upload_srv'], highlightDetails: 'Bypasses application servers, keeping backend CPU and bandwidth free.', latencyEstimate: '20ms' },
-        { step: 2, title: 'Direct Binary Upload', description: 'Client uploads compressed image directly to S3 bucket in 5MB chunks.', activeNodes: ['client', 's3_raw'], highlightDetails: 'HTTP PUT straight to AWS S3 multi-region edge.', latencyEstimate: '400ms' },
-        { step: 3, title: 'Asynchronous Image Transcoding', description: 'S3 triggers notification to SQS. Processing workers fetch raw image, apply filters, and generate 4 resolution variants in WebP/AVIF.', activeNodes: ['s3_raw', 'image_queue', 'workers', 's3_processed'], highlightDetails: 'Libvips executes parallel SIMD image downscaling.', latencyEstimate: '350ms' },
-        { step: 4, title: 'Feed Serving via CDN', description: 'Followers requesting photo feeds get optimized CDN URLs. CDN serves images from edge RAM cache in < 15ms.', activeNodes: ['client', 'cdn', 's3_processed'], highlightDetails: '98% CDN cache hit ratio for recent media.', latencyEstimate: '15ms' }
+        { step: 1, title: 'Get an upload URL', description: 'The client asks the API Gateway for permission to upload. The Upload Service checks the user\'s quota and returns a signed S3 URL that expires after 15 minutes.', activeNodes: ['client', 'gateway', 'upload_srv'], highlightDetails: 'The photo bytes never pass through the application servers, which saves their CPU and bandwidth.', latencyEstimate: '20ms' },
+        { step: 2, title: 'Upload straight to S3', description: 'The client sends the photo directly to the S3 bucket with an HTTP PUT. A typical photo fits in one request. Large files, such as videos, use multipart upload (several parts of at least 5 MB each).', activeNodes: ['client', 's3_raw'], highlightDetails: 'The signed URL limits the upload to one object key and a short time window.', latencyEstimate: '400ms' },
+        { step: 3, title: 'Process in the background', description: 'S3 sends an event to the queue. A worker downloads the raw image, applies filters, and creates several sizes in WebP or AVIF. It saves them to the processed bucket and writes the photo record.', activeNodes: ['s3_raw', 'image_queue', 'workers', 's3_processed'], highlightDetails: 'libvips resizes images quickly and uses little memory. If a worker fails, the queue retries the job.', latencyEstimate: '350ms' },
+        { step: 4, title: 'Serve through the CDN', description: 'Followers get CDN URLs for the optimized images. The CDN serves each image from the edge server nearest to the user. On a miss, it fetches the image from the processed bucket.', activeNodes: ['client', 'cdn', 's3_processed'], highlightDetails: 'Recent and popular photos stay in the edge cache, so most views never reach S3.', latencyEstimate: '15ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/api/v1/media/presign',
-        description: 'Get pre-signed upload URL for direct S3 upload',
+        description: 'Get a pre-signed URL for uploading straight to S3',
         requestBody: '{\n  "file_type": "image/jpeg",\n  "file_size": 3482910\n}',
         responseBody: '{\n  "upload_url": "https://ig-raw.s3.amazonaws.com/uploads/xyz.jpg?AWS...",\n  "media_id": "med_102938"\n}'
       },
       {
         method: 'POST',
         path: '/api/v1/posts',
-        description: 'Publish post after upload confirmation',
+        description: 'Publish a post after the upload is done',
         requestBody: '{\n  "media_id": "med_102938",\n  "caption": "Sunset in Malibu #travel",\n  "location": "Malibu, CA"\n}',
         responseBody: '{\n  "post_id": "pst_87654",\n  "status": "PUBLISHED"\n}'
       }
@@ -465,33 +469,33 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
           { name: 'likes_count', type: 'INT' },
           { name: 'created_at', type: 'TIMESTAMP', isIndex: true }
         ],
-        notes: 'PostgreSQL sharded by user_id with Read Replicas.'
+        notes: 'PostgreSQL, sharded by user_id, with read replicas for read traffic.'
       }
     ],
     deepDives: [
       {
-        title: 'Stories Architecture: 24-Hour Ephemeral Storage & Fast Scrubbing',
-        subtitle: 'Handling billions of daily story views with zero disk garbage collection overhead',
-        content: `Instagram Stories disappear after 24 hours. Storing them in primary relational databases causes high fragmentation due to mass DELETE queries.\n\nOptimized Architecture:\n1. Dedicated Stories Redis Cluster: Store active story metadata as a Redis ZSET with score = expiration_timestamp. Queries for user stories use ZRANGEBYSCORE to get only unexpired stories in O(log N).\n2. S3 Object Lifecycle Expiration: Media files in the S3 stories bucket have an automatic 24-hour expiration policy, delegating cleanup to AWS infrastructure without database I/O.\n3. Seen Receipts Tracking: Store a user seen status in a Redis Bitmap (1 bit per story ID) or client-side local cache to eliminate server roundtrips when showing colored story rings.`,
+        title: 'Stories: data that expires after 24 hours',
+        subtitle: 'Expire data without large DELETE jobs',
+        content: `Stories disappear after 24 hours. Storing them in the main relational database means large batches of DELETE statements, which leave dead rows and need heavy cleanup.\n\nA simpler design:\n1. Story metadata in Redis. Keep each user's active stories in a sorted set (ZSET) with the expiry time as the score. To list the stories that are still live, read the entries whose score is later than now (ZRANGEBYSCORE). Expired entries can be removed with ZREMRANGEBYSCORE or a key TTL.\n2. Media cleanup in S3. Put story media in its own bucket with a lifecycle rule that deletes objects one day after creation. S3 does this in the background, with no database work. Lifecycle rules work in whole days and run asynchronously, so an object can outlive its 24 hours. Always check the expiry time when serving a story, and do not rely on the delete alone.\n3. Seen state. To show the story ring as seen or unseen, cache the viewed state on the client. Keep the list of viewers for each story (for view receipts) in a Redis set, or in a store such as Cassandra if you need to keep it longer.`,
         keyTakeaways: [
-          'Redis ZSET + S3 Lifecycle rules prevent database delete storms.',
-          'Bitmap indexing allows checking if a user has watched 50 stories in a single bitwise operation.'
+          'A Redis sorted set with an expiry score plus an S3 lifecycle rule avoids large delete jobs in the main database.',
+          'Lifecycle deletion is approximate. Enforce the 24-hour limit when reading, not only when deleting.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'S3 Single Prefix Rate Limit (3,500 PUT / 5,500 GET per sec)',
-        impact: 'Massive concurrent uploads to a single s3://bucket/photos/ folder trigger HTTP 503 SlowDown errors.',
-        mitigation: 'Prefix S3 object keys with a hash or reverse timestamp (e.g., s3://bucket/2a8f/photos/med_123.jpg) to distribute requests across multiple S3 physical partition drives.'
+        bottleneck: 'S3 request limits per key prefix (3,500 writes and 5,500 reads per second per prefix)',
+        impact: 'If all uploads go under one prefix, such as s3://bucket/photos/, peak traffic can exceed the limit and S3 returns HTTP 503 SlowDown errors.',
+        mitigation: 'S3 applies the limit to each prefix and adds capacity as traffic grows, so spread keys over many prefixes (for example s3://bucket/2a8f/photos/med_123.jpg, where 2a8f comes from a hash of the ID). The CDN also absorbs most reads before they reach S3. Retry with exponential backoff when S3 returns 503.'
       }
     ],
     interviewQA: [
       {
         question: 'How do you handle users scrolling very fast through thousands of photos on mobile?',
-        hint: 'Network bandwidth and memory constraints on phones.',
-        goodAnswer: 'Implement progressive image loading (BlurHash placeholder first, then low-res WebP, then full resolution on viewport lock) combined with client-side windowed recycling view and viewport prefetching for the next 3 items.',
-        pitfalls: 'Downloading full 1080p uncompressed JPEG images immediately upon feed scroll.'
+        hint: 'Think about phone bandwidth and memory.',
+        goodAnswer: 'Load images in stages: show a small placeholder first (for example a BlurHash, a tiny encoded preview), then a low-resolution WebP, then the full size once the photo stays on screen. Recycle off-screen views (a windowed list) to save memory, and prefetch the next few photos.',
+        pitfalls: 'Downloading the full 1080p image for every photo as it scrolls past. It wastes data and memory on photos the user never looks at.'
       }
     ],
     similarSystems: ['Pinterest', 'Flickr', 'Snapchat', 'BeReal'],
@@ -501,7 +505,7 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
     id: 'youtube-netflix-video-streaming',
     title: 'Design YouTube / Netflix (Global Video Streaming)',
     slug: 'video-streaming-platform',
-    tagline: 'Petabyte-scale video ingestion, multi-bitrate chunked transcoding (DASH/HLS), and edge CDN streaming architecture.',
+    tagline: 'Accept uploaded videos, convert them into many qualities and small chunks, and stream them to viewers around the world through CDNs.',
     category: 'Social & Content',
     difficulty: 'Advanced',
     readTime: '25 min read',
@@ -509,55 +513,55 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
       dau: '1 Billion Daily Active Users',
       qps: '5 Million Video Stream Requests/sec / 50,000 Video Uploads/hour',
       storage: '500 Petabytes active video library',
-      bandwidth: '5 Terabits / second global egress'
+      bandwidth: '5 Terabits / second origin egress (after CDN offload)'
     },
-    overview: 'A global video streaming service ingests raw video files, encodes them into multiple resolutions (4K, 1080p, 720p, 360p) across multiple codecs (H.264, VP9, AV1), splits them into 2-6 second chunks, and streams them smoothly to clients using Adaptive Bitrate Streaming (HLS / MPEG-DASH).',
+    overview: 'A video streaming service takes raw video files, encodes (converts) them into several resolutions (4K, 1080p, 720p, 360p) and codecs (H.264, VP9, AV1), and cuts them into chunks of about 2 to 6 seconds. Players then stream the chunks with Adaptive Bitrate Streaming (ABR) over HLS or MPEG-DASH. The player picks the quality for each chunk based on the current network speed.',
     keyChallenges: [
-      'Transcoding massive 50GB raw video files quickly and cost-effectively using distributed DAG worker clusters',
-      'Adaptive Bitrate (ABR) algorithm: Dynamically adjusting video quality based on changing client network bandwidth',
-      'Minimizing CDN egress costs by deploying custom ISP edge appliances (Netflix Open Connect pattern)',
-      'Near-instant video start time (Time-To-First-Frame < 200ms) with intelligent chunk prefetching'
+      'Encoding very large source files (some are 50 GB) quickly and cheaply, by splitting the work across many workers in a workflow (a DAG, or directed acyclic graph, of tasks).',
+      'Adaptive bitrate: the player must change quality as the viewer\'s network speed changes.',
+      'Cutting delivery cost by placing cache servers inside ISP networks (the Netflix Open Connect approach).',
+      'Fast start: show the first frame in under 500 ms by prefetching the first chunks.'
     ],
     functionalRequirements: [
-      'Upload and transcode videos in popular formats (.mp4, .mov, .avi)',
-      'Stream video seamlessly on web, mobile, and smart TVs without buffering',
-      'Adaptive resolution switching (auto-adjust quality to network speed)',
-      'Search videos by title, tags, and description',
-      'Track video view counts and watch history resume positions'
+      'Upload videos in common formats (.mp4, .mov, .avi) and encode them.',
+      'Stream on web, mobile and smart TVs.',
+      'Switch resolution automatically to match network speed.',
+      'Search videos by title, tags and description.',
+      'Count views and remember each viewer\'s watch position.'
     ],
     nonFunctionalRequirements: [
-      'Low Playback Latency: Playback starts in < 500ms',
-      'Zero Stuttering / Buffering during network fluctuations',
-      'High Durability: Video files must never be corrupted or lost (11 9s)',
-      'Scale: Support millions of concurrent viewers during live events'
+      'Fast start: playback begins in under 500 ms.',
+      'Smooth playback: rebuffering (the video pausing to load) should be rare, even when the network speed changes.',
+      'Durability: uploaded videos must not be corrupted or lost (eleven nines).',
+      'Scale: serve millions of concurrent viewers during live events.'
     ],
-    outOfScope: ['Real-time 2-way WebRTC video calling', 'Digital Rights Management (DRM) licensing legal negotiations'],
+    outOfScope: ['Real-time two-way video calls (WebRTC).', 'Negotiating DRM licenses with studios.'],
     capacityEstimations: {
       assumptions: [
-        '500 hours of video uploaded every minute = ~8.3 hours/sec',
-        'Average raw video size: 300 MB per minute = 150 GB/min ingestion bandwidth',
-        'Storage per minute after encoding into 5 resolutions: ~100 MB = 50 GB/min (72 TB/day new video)',
-        'Active video library: 500 Petabytes',
-        '1 Billion daily video views; Average watch time: 10 minutes at 2 Mbps = 150 MB per view'
+        '500 hours of video are uploaded every minute. That is 30,000 video-minutes per minute, or about 8.3 hours of video per second.',
+        'A raw video is about 300 MB per minute of video. So uploads arrive at 9 TB per minute (150 GB/s).',
+        'After encoding into 5 resolutions, storage is about 100 MB per minute of video: 3 TB per minute, or 4.32 PB per day of new video (one copy, before replication).',
+        'The active video library is 500 PB.',
+        '1 billion video views per day. A view lasts 10 minutes on average at 2 Mbps, which is 150 MB per view.'
       ],
       metrics: [
-        { label: 'Ingress Bandwidth', value: '20 Gbps', formula: '500 hrs/min * 300 MB', description: 'Raw video upload ingestion traffic' },
-        { label: 'Egress Bandwidth (Peak)', value: '5 Tbps', formula: '10M concurrent streams * 2 Mbps / 4 (CDN offload factor)', description: 'Total global video delivery bandwidth' },
-        { label: 'Metadata QPS', value: '250,000 QPS', formula: 'Search, recommendations, and playback beacon logging', description: 'Backend API requests' }
+        { label: 'Ingress Bandwidth', value: '1.2 Tbps', formula: '30,000 video-min/min * 300 MB = 150 GB/s', description: 'Incoming raw video uploads' },
+        { label: 'Egress Bandwidth (Peak)', value: '5 Tbps', formula: '10M concurrent streams * 2 Mbps / 4 (CDN offload factor)', description: 'Traffic that still reaches the origin after the CDN and ISP caches. Total delivery to viewers is 20 Tbps.' },
+        { label: 'Metadata QPS', value: '250,000 QPS', formula: 'Search, recommendations, and playback beacon logging', description: 'Backend API requests per second' }
       ],
-      conclusion: 'Standard cloud egress costs would be astronomical; direct ISP peering and Edge Open Connect CDN appliances are mandatory.'
+      conclusion: 'Serving 20 Tbps from a central cloud region would cost far too much. Caches inside ISP networks and a CDN must serve most traffic, so the origin only handles cache misses.'
     },
     architecture: {
-      summary: 'Clients upload raw video via pre-signed S3 URLs -> S3 event triggers Distributed DAG Transcoder (splits video into GOP chunks, encodes in parallel) -> Uploads HLS .m3u8 playlists and .ts segments to Object Storage -> Distributed to Global CDN and ISP Edge Caches -> Client player adapts bitrate dynamically.',
+      summary: 'Clients upload raw video to S3 with pre-signed URLs. An S3 event starts a transcoding workflow that splits the video at keyframe boundaries (GOP chunks), encodes the chunks in parallel, and writes HLS playlists (.m3u8) and segments to object storage. The CDN and ISP caches then serve the segments. The player picks a quality for each chunk.',
       nodes: [
-        { id: 'client', label: 'Video Player Client', type: 'client', x: 8, y: 50, description: 'Adaptive Bitrate player (ExoPlayer, HLS.js)' },
-        { id: 'cdn', label: 'Global Video CDN / ISP PoPs', type: 'cdn', x: 26, y: 70, description: 'Caches 2-second video chunks at ISP networks', techStack: ['Netflix Open Connect / Fastly'] },
-        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 26, y: 30, description: 'Auth, recommendations, and search proxy', techStack: ['Envoy / Zuul'] },
-        { id: 's3_raw', label: 'Raw Video Staging (S3)', type: 'storage', x: 45, y: 15, description: 'Stores original uploaded video before encoding', techStack: ['AWS S3'] },
-        { id: 'dag_orchestrator', label: 'DAG Transcoding Engine', type: 'worker', x: 65, y: 15, description: 'Orchestrates chunking, audio extraction, and video filters', techStack: ['Temporal / Apache Airflow'] },
-        { id: 'transcode_cluster', label: 'Transcode GPU Cluster', type: 'worker', x: 85, y: 15, description: 'Encodes chunks into AV1, VP9, H.264 at 4K/1080p/720p', techStack: ['FFmpeg + NVENC GPU'] },
-        { id: 's3_encoded', label: 'Segmented Object Store', type: 'storage', x: 85, y: 50, description: 'Stores HLS master.m3u8 manifests and 4s video chunks', techStack: ['AWS S3 Standard'] },
-        { id: 'metadata_db', label: 'Video Metadata Store', type: 'database', x: 45, y: 50, description: 'Indexes video titles, thumbnails, views, tags', techStack: ['Cassandra / Spanner'] },
+        { id: 'client', label: 'Video Player Client', type: 'client', x: 8, y: 50, description: 'An adaptive bitrate player (ExoPlayer, HLS.js)' },
+        { id: 'cdn', label: 'Global Video CDN / ISP PoPs', type: 'cdn', x: 26, y: 70, description: 'Caches video chunks on servers inside ISP networks and at CDN points of presence (PoPs)', techStack: ['Netflix Open Connect / Fastly'] },
+        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 26, y: 30, description: 'Handles auth and passes recommendation and search requests on', techStack: ['Envoy / Zuul'] },
+        { id: 's3_raw', label: 'Raw Video Staging (S3)', type: 'storage', x: 45, y: 15, description: 'Holds the original upload until encoding finishes', techStack: ['AWS S3'] },
+        { id: 'dag_orchestrator', label: 'DAG Transcoding Engine', type: 'worker', x: 65, y: 15, description: 'Runs the steps: split into chunks, extract audio, apply filters', techStack: ['Temporal / Apache Airflow'] },
+        { id: 'transcode_cluster', label: 'Transcode GPU Cluster', type: 'worker', x: 85, y: 15, description: 'Encodes chunks into AV1, VP9 and H.264 at 4K, 1080p and 720p', techStack: ['FFmpeg + NVENC GPU'] },
+        { id: 's3_encoded', label: 'Segmented Object Store', type: 'storage', x: 85, y: 50, description: 'Holds the HLS master manifest (master.m3u8) and the video chunks', techStack: ['AWS S3 Standard'] },
+        { id: 'metadata_db', label: 'Video Metadata Store', type: 'database', x: 45, y: 50, description: 'Stores titles, thumbnails, view counts and tags', techStack: ['Cassandra / Spanner'] },
         { id: 'search_cluster', label: 'Video Search Index', type: 'search', x: 45, y: 80, description: 'Full-text search over video metadata', techStack: ['Elasticsearch'] }
       ],
       edges: [
@@ -572,24 +576,24 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
         { id: 'e9', from: 'cdn', to: 's3_encoded', label: 'Fetch Chunk on Miss', protocol: 'HTTPS' }
       ],
       flowSteps: [
-        { step: 1, title: 'Multipart Upload Ingestion', description: 'Client uploads 10GB raw video to S3 using S3 Multipart Upload API (uploading 20MB parts in parallel).', activeNodes: ['client', 's3_raw'], highlightDetails: 'If connection drops, only uncompleted 20MB parts need to be retransmitted.', latencyEstimate: '10-60s' },
-        { step: 2, title: 'Chunk Splitting & DAG Transcoding', description: 'Temporal workflow splits video along GOP (Group of Pictures) boundaries into 100 small chunks and distributes to 50 GPU workers.', activeNodes: ['s3_raw', 'dag_orchestrator', 'transcode_cluster'], highlightDetails: 'Processes a 2-hour movie in under 4 minutes via massive parallelization.', latencyEstimate: '2-4 mins' },
-        { step: 3, title: 'HLS Packaging & Manifest Creation', description: 'Workers stitch encoded chunks, generate master.m3u8 playlist file containing bandwidth profiles, and upload to S3.', activeNodes: ['transcode_cluster', 's3_encoded', 'metadata_db'], highlightDetails: 'Manifest lists multiple bitrates (e.g. 500kbps, 1500kbps, 4000kbps).', latencyEstimate: '500ms' },
-        { step: 4, title: 'Adaptive Streaming Playback', description: 'Client player downloads master.m3u8, measures download throughput, and requests appropriate .ts chunk from nearest CDN edge.', activeNodes: ['client', 'cdn', 's3_encoded'], highlightDetails: 'Player automatically steps down to 720p if mobile signal weakens, preventing buffering.', latencyEstimate: '15-30ms' }
+        { step: 1, title: 'Upload in parts', description: 'The client uploads a large raw video (for example 10 GB) to S3 with multipart upload. It sends the file in parts (for example 20 MB each), several at a time.', activeNodes: ['client', 's3_raw'], highlightDetails: 'If the connection drops, the client only resends the parts that did not finish.', latencyEstimate: '10-60s' },
+        { step: 2, title: 'Split and encode in parallel', description: 'A Temporal workflow splits the video at keyframe boundaries (GOP, or Group of Pictures, boundaries) into many chunks. It spreads the chunks over GPU workers, and each worker encodes its chunks.', activeNodes: ['s3_raw', 'dag_orchestrator', 'transcode_cluster'], highlightDetails: 'Each chunk starts at a keyframe, so chunks can be encoded independently. Encoding many chunks at once finishes a long video much faster than encoding it in one piece.', latencyEstimate: '2-4 mins' },
+        { step: 3, title: 'Package and publish', description: 'Workers write the encoded chunks and a master playlist (master.m3u8) that lists each quality and its bandwidth. They upload everything to S3 and mark the video as ready.', activeNodes: ['transcode_cluster', 's3_encoded', 'metadata_db'], highlightDetails: 'The manifest lists several bitrates (for example 500 kbps, 1,500 kbps and 4,000 kbps).', latencyEstimate: '500ms' },
+        { step: 4, title: 'Play with adaptive bitrate', description: 'The player downloads the master playlist, measures how fast chunks download, and requests each next chunk at a suitable quality from the nearest CDN edge.', activeNodes: ['client', 'cdn', 's3_encoded'], highlightDetails: 'If the signal gets weaker, the player moves down to a lower quality (for example 720p) before its buffer runs out.', latencyEstimate: '15-30ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/api/v1/videos/upload-init',
-        description: 'Initiate video upload session and get multipart upload ID',
+        description: 'Start an upload session and get a multipart upload ID',
         requestBody: '{\n  "title": "System Design Masterclass",\n  "file_size": 2147483648,\n  "duration_seconds": 3600\n}',
         responseBody: '{\n  "video_id": "vid_9876",\n  "upload_id": "mp_upload_abc123",\n  "part_size": 20971520\n}'
       },
       {
         method: 'GET',
         path: '/api/v1/videos/{video_id}/manifest.m3u8',
-        description: 'Fetch HLS adaptive bitrate manifest',
+        description: 'Get the HLS manifest that lists the available qualities',
         responseBody: '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=4500000,RESOLUTION=1920x1080\n1080p/playlist.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1800000,RESOLUTION=1280x720\n720p/playlist.m3u8'
       }
     ],
@@ -607,33 +611,33 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
           { name: 'status', type: 'VARCHAR(32)', notes: 'PROCESSING, READY, FAILED' },
           { name: 'views_count', type: 'BIGINT' }
         ],
-        notes: 'ScyllaDB / Cassandra for high-throughput reads and concurrent view updates.'
+        notes: 'ScyllaDB or Cassandra handle many reads and writes. Do not update views_count on every view. Count views elsewhere (see the bottleneck below) and write the total in batches.'
       }
     ],
     deepDives: [
       {
-        title: 'Adaptive Bitrate Streaming: HLS vs MPEG-DASH Protocols',
-        subtitle: 'How modern players switch resolutions seamlessly without dropping frames',
-        content: `Traditional progressive download (.mp4 file) downloads the entire file sequentially at fixed quality. If bandwidth drops below bitrate, video freezes.\n\nAdaptive Bitrate Architecture (HLS & DASH):\n1. Video is chopped into independent 2-6 second chunks (.ts or .m4s fragments).\n2. Each chunk is encoded at multiple resolutions/bitrates (e.g. 360p @ 400kbps, 720p @ 1.5Mbps, 1080p @ 4.5Mbps, 4K @ 15Mbps).\n3. Client player continuously measures download speed of the last chunk and buffer occupancy:\n   - If buffer is > 15s and network speed is high -> Request next chunk at 1080p.\n   - If buffer drops to < 4s (user enters subway tunnel) -> Instantly request next 2-second chunk at 360p.\n4. Result: Zero player stalls or buffering spinners!`,
+        title: 'Adaptive bitrate streaming: HLS and MPEG-DASH',
+        subtitle: 'How a player changes quality in the middle of a video',
+        content: `With progressive download (one .mp4 file), the player downloads the whole file at one fixed quality. If the network is slower than the video bitrate, the video stalls.\n\nHLS and DASH solve this:\n1. The video is cut into short chunks (2 to 6 seconds), stored as .ts or .m4s (fragmented MP4) files.\n2. Each chunk is encoded at several qualities, for example 360p at 400 kbps, 720p at 1.5 Mbps, 1080p at 4.5 Mbps and 4K at 15 Mbps.\n3. The player measures how fast the last chunks downloaded and how much video is in its buffer. Then it picks the quality of the next chunk. For example:\n   - Buffer above 15 s and a fast network: ask for the next chunk at 1080p.\n   - Buffer below 4 s (the viewer enters a tunnel): ask for the next chunk at 360p.\n4. Result: the player can lower quality before the buffer is empty, so stalls are much less likely. They can still happen if the network drops below even the lowest quality.\n\nBoth protocols use a manifest file that lists the qualities: .m3u8 for HLS and .mpd for DASH.`,
         keyTakeaways: [
-          'Master manifest (.m3u8 / .mpd) contains URIs for all bitrate streams.',
-          'Chunk length trade-off: 2s chunks switch quality faster and reduce live latency; 6s chunks have better compression efficiency.'
+          'The master manifest (.m3u8 or .mpd) holds the URLs of every quality level.',
+          'Chunk length is a trade-off. Short chunks (2 s) let the player switch quality faster and lower live-stream delay, but they cost more in compression efficiency and in requests. Longer chunks (6 s) compress better.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Massive Video View Counter Updates (Hot Video)',
-        impact: 'A viral video gets 100,000 views/sec, causing write lock contention on a single DB row.',
-        mitigation: 'Buffer view counts in Redis Distributed Counters (INCRBY) or Kafka stream and flush in batches of 1,000 views to the database every 10 seconds.'
+        bottleneck: 'View counter on a hot video',
+        impact: 'A viral video gets 100,000 views per second. Updating one database row for each view causes lock contention on that row.',
+        mitigation: 'Count views in Redis with INCRBY, or send view events to Kafka and aggregate them. Write the totals to the database in batches every few seconds. Viewers see a count that is a few seconds old, which is acceptable.'
       }
     ],
     interviewQA: [
       {
-        question: 'How do you optimize CDN cache hits when 90% of videos in the long tail are rarely watched?',
-        hint: 'Tiered caching and intelligent eviction.',
-        goodAnswer: 'Implement Tiered Caching: Store popular top 10% videos on Edge CDN SSDs, warm the next 20% in regional Mid-Tier CDNs, and leave the remaining 70% cold long-tail videos stored on S3 Standard-IA, fetching on-demand only when requested.',
-        pitfalls: 'Trying to cache all 500 Petabytes of video on edge servers.'
+        question: 'How do you keep CDN cache hits high when most videos in the long tail are rarely watched?',
+        hint: 'Use tiers of cache, and decide what to evict.',
+        goodAnswer: 'Use tiered caching. Keep the most popular videos on edge servers (close to viewers). Keep a wider set on regional mid-tier caches. Leave rarely watched videos only in object storage, and fetch them from the origin on the first request. Use eviction rules that favor popular content, such as LRU (least recently used). Place new releases on edge servers ahead of time, during off-peak hours, if you expect them to be popular.',
+        pitfalls: 'Trying to cache the whole 500 PB library on edge servers. Most of it would be almost never read.'
       }
     ],
     similarSystems: ['Netflix', 'Hulu', 'Twitch VOD', 'Disney+'],
@@ -643,61 +647,62 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
     id: 'tiktok-short-video',
     title: 'Design TikTok (Short-Form Video Feed & Recommendation)',
     slug: 'tiktok-architecture',
-    tagline: 'Ultra-low latency infinite vertical video swipe feed, real-time ML recommendation loops, and video prefetching.',
+    tagline: 'Serve an endless swipe feed of short videos that start playing at once, using a recommendation system that learns from each swipe.',
     category: 'Social & Content',
     difficulty: 'Advanced',
     readTime: '22 min read',
     scaleSummary: {
       dau: '800 Million Daily Active Users',
-      qps: '1.2 Million Feed Requests/sec / 150,000 Video Creations/sec',
+      qps: '1.2 Million Feed Requests/sec / 580 Video Uploads/sec avg',
       storage: '250 TB / day',
       bandwidth: '800 GB/s Global Edge Bandwidth'
     },
-    overview: 'TikTok delivers a personalized, infinite vertical scroll feed of 15-60 second videos with sub-100ms video start times on swipe. The architecture couples deep real-time machine learning feature stores (watch time, rewatches, skips, shares) with aggressive client-side chunk prefetching.',
+    overview: 'TikTok shows a personalized, endless vertical feed of short videos (15 to 60 seconds). Each video should start within about 100 ms of a swipe. To do this, the system combines a recommendation pipeline fed by live behavior signals (watch time, rewatches, skips, shares) with a client that downloads the start of upcoming videos in advance (prefetching).',
     keyChallenges: [
-      'Zero-Latency Video Swiping: Ensuring the next video plays instantly (< 50ms) when the user swipes up',
-      'Real-Time Feedback Loop: User watch duration (e.g. watched 3s vs watched 100% vs instant skip) must update ML recommendation models within 2 seconds',
-      'High-Concurrency Video Ingestion & Audio Sync Pipeline',
-      'Edge CDN Prefetching: Predicting and pre-loading the first 2 seconds of the top 3 candidate videos'
+      'Instant playback: the next video should start almost immediately when the user swipes up.',
+      'A fast feedback loop: signals such as "watched 3 seconds", "watched to the end" or "skipped at once" should reach the recommendation features within about 2 seconds.',
+      'Uploading and processing many videos, including audio sync.',
+      'Prefetching: loading the first few seconds of the next videos before the user asks for them, without wasting mobile data.'
     ],
     functionalRequirements: [
-      'Infinite vertical swipe "For You Page" (FYP) with instant video playback',
-      'Record, edit, apply music/effects, and publish 15-60s videos',
-      'Collect micro-telemetry (exact watch milliseconds, loop count, pause, share)',
-      'Real-time personalized recommendation ranking'
+      'An endless vertical "For You" feed (FYP) where videos start playing at once.',
+      'Record, edit, add music and effects, and publish 15 to 60 second videos.',
+      'Collect fine-grained signals: exact watch time, loop count, pauses and shares.',
+      'Rank videos for each user in near real time.'
     ],
     nonFunctionalRequirements: [
-      'Video Time-to-Play on swipe < 100ms (P99)',
-      'Recommendation freshness: newly liked video influences next 5 feed items',
-      'High availability 99.99%',
-      'Bandwidth optimization on mobile cellular networks'
+      'Time to play after a swipe: under 100 ms at P99.',
+      'Freshness: a video the user just liked should affect the next few feed items (about 5).',
+      'Availability: 99.99%.',
+      'Save data on mobile networks.'
     ],
-    outOfScope: ['Live Shopping Auctions', 'E2E Direct Messaging'],
+    outOfScope: ['Live shopping auctions.', 'End-to-end encrypted direct messages.'],
     capacityEstimations: {
       assumptions: [
-        '800M DAU; each user watches 80 videos/day = 64 Billion video views/day (~740,000 QPS avg, 1.2M peak QPS)',
-        'Average short video size: 5 MB (compressed 720p 9:16 vertical video)',
-        'Prefetching: Client downloads first 500 KB (initial 2 seconds) of next 3 videos in advance'
+        '800M daily active users, each watching 80 videos a day: 64 billion views/day. That is about 740,000 views/s on average and 1.2M/s at peak.',
+        'An average short video is 5 MB (compressed 720p, 9:16 vertical).',
+        'Prefetching: the client downloads the first 500 KB (about the first 2 seconds) of the next few videos ahead of time.',
+        '50M new videos per day, about 580 uploads/s on average. Storage figures are one copy, before replication.'
       ],
       metrics: [
-        { label: 'Feed Recommendation QPS', value: '1,200,000 QPS', formula: 'Peak feed pagination requests', description: 'ML candidate retrieval + ranking' },
-        { label: 'Telemetry Event Ingestion', value: '3,500,000 events/s', formula: 'Watch duration beacons + swipe events', description: 'Kafka clickstream ingestion' },
-        { label: 'Daily Video Storage', value: '250 TB / day', formula: '50M new videos * 5 MB', description: 'Distributed object storage growth' }
+        { label: 'Feed Recommendation QPS', value: '1,200,000 QPS', formula: 'Peak feed pagination requests', description: 'Requests for candidate retrieval and ranking' },
+        { label: 'Telemetry Event Ingestion', value: '3,500,000 events/s', formula: 'Watch duration beacons + swipe events', description: 'Events entering the Kafka stream' },
+        { label: 'Daily Video Storage', value: '250 TB / day', formula: '50M new videos * 5 MB', description: 'New data per day in object storage' }
       ],
-      conclusion: 'The mobile client must intelligently prefetch only the first 2 seconds of candidate videos to save 60% cellular bandwidth.'
+      conclusion: 'Prefetching the whole next videos would waste mobile data on videos the user skips. The client should prefetch only the first seconds, and load the rest if the user stays on the video.'
     },
     architecture: {
-      summary: 'Clients communicate with API Gateway -> Recommendation Engine (Retrieval -> Filtering -> Heavy Deep Learning Scoring) -> Returns Ranked Video List -> Mobile App prefetches first 500KB of top 3 videos via Edge CDN -> Telemetry streaming into Kafka + Flink for real-time feature store updates.',
+      summary: 'The client asks the API Gateway for a feed. The Recommendation Orchestrator reads user features, retrieves candidate videos, and ranks them with a neural model. It returns a ranked list. The app prefetches the start of the next videos from the CDN. Watch events flow through Kafka into Flink, which updates the user features that the next feed request uses.',
       nodes: [
-        { id: 'client', label: 'Mobile Client (TikTok App)', type: 'client', x: 8, y: 50, description: 'Handles swipe gestures & prefetch cache' },
-        { id: 'cdn', label: 'Edge Video CDN', type: 'cdn', x: 26, y: 75, description: 'Serves prefetched video chunks', techStack: ['Cloudflare / Edge POPs'] },
-        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 26, y: 30, description: 'Routes FYP feed & telemetry requests', techStack: ['Envoy'] },
-        { id: 'rec_service', label: 'Recommendation Orchestrator', type: 'service', x: 48, y: 30, description: 'Multi-stage candidate generation & ranking', techStack: ['Go / C++ Microservices'] },
-        { id: 'retrieval', label: 'Candidate Retrieval (ANN)', type: 'search', x: 68, y: 15, description: 'Filters 100M videos down to 2,000 candidates', techStack: ['Vector DB / Milvus / HNSW'] },
-        { id: 'ranking_model', label: 'Deep Ranking Engine', type: 'worker', x: 88, y: 15, description: 'Two-Tower & Transformer model scores top 100 videos', techStack: ['PyTorch / Triton GPU'] },
-        { id: 'feature_store', label: 'Real-Time Feature Store', type: 'cache', x: 68, y: 45, description: 'User instant preferences (last 10 watched tags)', techStack: ['Redis / Feast'] },
-        { id: 'kafka_telemetry', label: 'Telemetry Stream (Kafka)', type: 'queue', x: 48, y: 75, description: 'Ingests swipe, pause, and watch-time events', techStack: ['Apache Kafka'] },
-        { id: 'flink', label: 'Flink Stream Processing', type: 'worker', x: 68, y: 75, description: 'Calculates real-time user engagement features', techStack: ['Apache Flink'] }
+        { id: 'client', label: 'Mobile Client (TikTok App)', type: 'client', x: 8, y: 50, description: 'Handles swipes and keeps the prefetch cache' },
+        { id: 'cdn', label: 'Edge Video CDN', type: 'cdn', x: 26, y: 75, description: 'Serves video chunks, including prefetch requests', techStack: ['Cloudflare / Edge POPs'] },
+        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 26, y: 30, description: 'Routes feed and telemetry requests', techStack: ['Envoy'] },
+        { id: 'rec_service', label: 'Recommendation Orchestrator', type: 'service', x: 48, y: 30, description: 'Runs the steps: candidate retrieval, filtering, ranking', techStack: ['Go / C++ Microservices'] },
+        { id: 'retrieval', label: 'Candidate Retrieval (ANN)', type: 'search', x: 68, y: 15, description: 'Narrows a huge video pool to a few thousand likely candidates with approximate nearest neighbor (ANN) search', techStack: ['Vector DB / Milvus / HNSW'] },
+        { id: 'ranking_model', label: 'Deep Ranking Engine', type: 'worker', x: 88, y: 15, description: 'A neural network scores each candidate for this user, then the best are picked', techStack: ['PyTorch / Triton GPU'] },
+        { id: 'feature_store', label: 'Real-Time Feature Store', type: 'cache', x: 68, y: 45, description: 'Holds fresh user signals, such as the topics of the last videos watched', techStack: ['Redis / Feast'] },
+        { id: 'kafka_telemetry', label: 'Telemetry Stream (Kafka)', type: 'queue', x: 48, y: 75, description: 'Receives swipe, pause and watch-time events', techStack: ['Apache Kafka'] },
+        { id: 'flink', label: 'Flink Stream Processing', type: 'worker', x: 68, y: 75, description: 'Computes user engagement features as events arrive', techStack: ['Apache Flink'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'gateway', label: '1. GET /feed/fyp', protocol: 'HTTPS' },
@@ -711,23 +716,23 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
         { id: 'e9', from: 'flink', to: 'feature_store', label: '9. Update User Vector (1s)', protocol: 'TCP', isAsync: true }
       ],
       flowSteps: [
-        { step: 1, title: 'Multi-Stage Recommendation Pipeline', description: 'When app requests feed, Retrieval stage pulls 2,000 candidate video IDs matching user interests using Vector ANN Search.', activeNodes: ['gateway', 'rec_service', 'feature_store', 'retrieval'], highlightDetails: 'Filters out already-watched videos using user Bloom Filters.', latencyEstimate: '25ms' },
-        { step: 2, title: 'Deep Neural Ranking & Diversity Filtering', description: 'Triton GPU cluster evaluates candidates against user engagement embeddings, applies diversity rules (no 2 videos with same song in a row), and returns top 10 videos.', activeNodes: ['rec_service', 'ranking_model'], highlightDetails: 'Predicts Probability(Watch > 80%), Probability(Like), Probability(Share).', latencyEstimate: '35ms' },
-        { step: 3, title: 'Smart Client Prefetching', description: 'Client player receives the 10 video URLs and immediately initiates parallel HTTP range requests for the first 500KB of videos #1, #2, and #3 from Edge CDN.', activeNodes: ['client', 'cdn'], highlightDetails: 'When user swipes up, video #2 plays from memory buffer in < 20ms.', latencyEstimate: '40ms' },
-        { step: 4, title: 'Real-Time Telemetry Feedback Loop', description: 'As user watches video #1 for 14 seconds and likes it, telemetry beacon streams to Kafka -> Flink updates user preference vector in Redis in < 1 second.', activeNodes: ['client', 'kafka_telemetry', 'flink', 'feature_store'], highlightDetails: 'Next feed pagination reflects the updated taste profile immediately.', latencyEstimate: '500ms' }
+        { step: 1, title: 'Retrieve candidates', description: 'The app asks for a feed. The Orchestrator reads the user\'s features and uses vector search (ANN) to pull a few thousand candidate video IDs that match the user\'s interests.', activeNodes: ['gateway', 'rec_service', 'feature_store', 'retrieval'], highlightDetails: 'A per-user Bloom filter (a compact set that can say "probably seen") removes videos the user already watched.', latencyEstimate: '25ms' },
+        { step: 2, title: 'Rank and diversify', description: 'A GPU cluster (Triton) scores the candidates for this user. Diversity rules then apply, for example no two videos with the same song in a row. The service returns the top videos, about 10.', activeNodes: ['rec_service', 'ranking_model'], highlightDetails: 'The model predicts the chance of events such as watching most of the video, liking it, and sharing it.', latencyEstimate: '35ms' },
+        { step: 3, title: 'Prefetch', description: 'The app gets the list of video URLs. It then sends HTTP range requests to the CDN for the first part of the next videos (about 500 KB for the next one).', activeNodes: ['client', 'cdn'], highlightDetails: 'When the user swipes up, the next video starts from data already on the phone. The rest streams in while it plays.', latencyEstimate: '40ms' },
+        { step: 4, title: 'Learn from behavior', description: 'The user watches video #1 for 14 seconds and likes it. The app sends the events to Kafka. Flink updates the user\'s features in Redis within about a second.', activeNodes: ['client', 'kafka_telemetry', 'flink', 'feature_store'], highlightDetails: 'The next feed request reads the updated features, so the like can change what comes next.', latencyEstimate: '500ms' }
       ]
     },
     apiDesign: [
       {
         method: 'GET',
         path: '/api/v2/feed/fyp',
-        description: 'Fetch next batch of personalized short videos',
+        description: 'Get the next batch of personalized videos',
         responseBody: '{\n  "items": [\n    {\n      "video_id": "tk_192837",\n      "video_url": "https://cdn.tiktok.com/v/192837.mp4",\n      "author": "@techlead",\n      "music_id": "mus_402",\n      "duration": 22.4\n    }\n  ],\n  "cursor": "cur_987"\n}'
       },
       {
         method: 'POST',
         path: '/api/v2/telemetry/beacon',
-        description: 'Stream micro-interaction metrics for video',
+        description: 'Send watch signals for one video',
         requestBody: '{\n  "video_id": "tk_192837",\n  "watch_time_ms": 22400,\n  "completed_loops": 2,\n  "interacted": true\n}'
       }
     ],
@@ -740,33 +745,33 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
           { name: 'user_id', type: 'UUID', isPrimary: true },
           { name: 'bloom_filter_bits', type: 'BLOB', notes: 'Stores 10,000 watched video IDs in 12KB bitset' }
         ],
-        notes: 'Enables sub-millisecond check to avoid showing duplicate videos.'
+        notes: 'A fast check to avoid showing the same video twice. A Bloom filter can give false positives (it may hide a video the user has not seen), but never false negatives.'
       }
     ],
     deepDives: [
       {
-        title: 'Zero-Latency Swipe Engine: Client-Side Chunk Prefetching',
-        subtitle: 'The secret to TikTok instant video playback',
-        content: `If a mobile player waits for the user to swipe up before initiating a network request to load a video, network latency (150-400ms) creates an annoying black screen or loading spinner.\n\nTikTok Prefetch Engine Strategy:\n1. Top 1 Video (Currently Playing): Buffer entire video (or next 10 seconds).\n2. Top 2 Video (Directly Below): Prefetch initial 500 KB (Header + First 2 seconds of video frames).\n3. Top 3 Video: Prefetch first 200 KB.\n4. On Swipe Up: Top 2 video starts playing instantly from RAM buffer while background thread streams the remaining video chunks via HTTP Range: bytes=500000-.\n5. Cache Eviction: If user swipes fast without watching, discard prefetched bytes to prevent mobile device memory pressure.`,
+        title: 'Instant swipes: prefetching the start of videos',
+        subtitle: 'How the next video can start without a loading spinner',
+        content: `If the app waits for the swipe before it requests the next video, network delay (often 150 to 400 ms) shows up as a black screen or a spinner.\n\nA prefetch strategy:\n1. Current video: buffer ahead as it plays (for example the next 10 seconds, or the whole video if it is short).\n2. Next video: prefetch the first 500 KB, which covers the file header and about the first 2 seconds of frames.\n3. The video after that: prefetch a smaller piece, for example the first 200 KB.\n4. On swipe: the next video starts from the data already on the phone. In the background, the app requests the rest with an HTTP Range header (for example Range: bytes=500000-).\n5. Fast swipes: if the user skips a video, stop its download and drop the buffered data to save memory and mobile data.\n\nThe cost is that some prefetched data is wasted when the user skips a video. A short prefix wastes much less than downloading whole videos in advance, and the amount is a tuning choice.`,
         keyTakeaways: [
-          'HTTP Range headers allow downloading partial video headers without fetching entire files.',
-          'Saves 70% CDN bandwidth compared to downloading entire videos in advance.'
+          'HTTP Range requests let the app download only the start of a file, so it needs no extra copy of the video.',
+          'Prefetching only a short prefix costs far less data than prefetching whole videos, though it still uses some data on skipped videos.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Cold Start Problem for New Videos',
-        impact: 'Newly uploaded videos have 0 historical views and never get recommended by ML models.',
-        mitigation: 'Inject 5% "Explore / Exploration" traffic: every user feed receives 1 unrated new video per 20 items, collecting initial telemetry to bootstrap recommendation score.'
+        bottleneck: 'Cold start for new videos',
+        impact: 'A new video has no views, so a model that relies on past engagement will rarely pick it.',
+        mitigation: 'Reserve a small share of the feed for exploration (for example 1 new video in 20, or 5%). Collect early watch signals from those showings, then use them to score the video.'
       }
     ],
     interviewQA: [
       {
-        question: 'How do you prevent showing the user the same video twice within 7 days?',
-        hint: 'Querying billions of historical view rows is too slow.',
-        goodAnswer: 'Maintain a 10KB Scalable Bloom Filter or Redis Cuckoo Filter per user in memory. During candidate generation, test candidate video IDs against the user filter in O(1) time and prune matches.',
-        pitfalls: 'Using SQL SELECT ... WHERE video_id NOT IN (SELECT ...).'
+        question: 'How do you avoid showing a user the same video twice within 7 days?',
+        hint: 'Querying billions of watch-history rows for every feed request is too slow.',
+        goodAnswer: 'Keep a compact probabilistic filter for each user in memory, for example a Bloom filter (about 12 KB for 10,000 videos at roughly a 1% false-positive rate). While generating candidates, test each video ID against the filter and drop the matches. A plain Bloom filter cannot delete entries, so use one filter per day and drop the oldest, or use a Cuckoo filter, which supports deletion. A false positive only hides a video that was not actually seen, which is harmless.',
+        pitfalls: 'Using SQL such as SELECT ... WHERE video_id NOT IN (SELECT ...) on a large history table.'
       }
     ],
     similarSystems: ['Instagram Reels', 'YouTube Shorts', 'Snapchat Spotlight'],
@@ -776,59 +781,59 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
     id: 'reddit-forum',
     title: 'Design Reddit / Community Forum & Hot Ranking',
     slug: 'reddit-architecture',
-    tagline: 'High-concurrency voting engine, nested comment trees, and dynamic Hot ranking algorithm.',
+    tagline: 'Handle heavy voting, store deeply nested comment threads, and rank posts with the Hot algorithm.',
     category: 'Social & Content',
     difficulty: 'Intermediate',
     readTime: '18 min read',
     scaleSummary: {
       dau: '70 Million Daily Active Users',
-      qps: '80,000 Read QPS / 12,000 Vote & Comment QPS',
+      qps: '80,000 Read QPS / 13,500 Vote & Comment QPS',
       storage: '10 TB / year text posts & comment trees',
       bandwidth: '15 GB/s Egress'
     },
-    overview: 'Reddit is a community platform with thousands of subreddits where users submit links/text, vote (upvote/downvote), and participate in deeply nested hierarchical comment threads. The system requires an efficient voting aggregator and low-latency comment tree retrieval.',
+    overview: 'Reddit is a community site with thousands of subreddits. Users submit links or text, vote posts and comments up or down, and reply to each other in nested comment threads. The system needs a fast way to count votes and a fast way to load a comment tree.',
     keyChallenges: [
-      'High-concurrency atomic voting without database row lock contention',
-      'Rendering deeply nested comment trees (10+ levels deep with millions of comments) in < 150ms',
-      'The "Hot" Ranking Algorithm: Decaying post scores logarithmically over time',
-      'Subreddit feed caching with real-time score updates'
+      'Counting votes safely when many users vote at once, without row lock contention in the database.',
+      'Loading deeply nested comment trees (10 or more levels, and very large threads) in under 150 ms.',
+      'The Hot ranking algorithm: it combines the vote score (on a log scale) with the post age, so newer posts rank higher.',
+      'Caching subreddit feeds while scores keep changing.'
     ],
     functionalRequirements: [
-      'Create subreddits, submit posts (text, links, images)',
-      'Upvote and downvote posts and comments',
-      'Post nested comments (reply to comments recursively)',
-      'Subreddit feed sorting: Hot, New, Top (day/week/all), Rising'
+      'Create subreddits and submit posts (text, links, images).',
+      'Upvote and downvote posts and comments.',
+      'Reply to comments, to any depth.',
+      'Sort a subreddit feed by Hot, New, Top (day, week, all time) or Rising.'
     ],
     nonFunctionalRequirements: [
-      'Subreddit page load < 100ms',
-      'Vote reflection latency < 1 second',
-      'High Availability (99.99%)',
-      'Comment tree retrieval in single query (prevent N+1 query problem)'
+      'A subreddit page loads in under 100 ms.',
+      'A vote shows up in under 1 second.',
+      'Availability: 99.99%.',
+      'Load a comment tree with one query, not one query per comment (the N+1 query problem).'
     ],
-    outOfScope: ['Live Audio Rooms (Reddit Talk)', 'Direct Chat Encryption'],
+    outOfScope: ['Live audio rooms (Reddit Talk).', 'Encrypted direct chat.'],
     capacityEstimations: {
       assumptions: [
-        '70M DAU; 50M votes cast per day (~600 votes/sec avg, 12,000 peak QPS)',
-        '5M new comments posted per day (~60 comments/sec avg, 1,500 peak QPS)',
-        'Read traffic: 300M page views/day (~3,500 QPS avg, 80,000 peak QPS)'
+        '70M daily active users; 50M votes per day: about 600 votes/s on average and 12,000/s at peak.',
+        '5M new comments per day: about 60 comments/s on average and 1,500/s at peak.',
+        'Reads: 300M page views per day: about 3,500/s on average and 80,000/s at peak.'
       ],
       metrics: [
-        { label: 'Read QPS', value: '80,000 QPS', formula: 'Peak subreddit and comment thread views', description: 'Read traffic to CDN and App tier' },
-        { label: 'Vote Ingestion QPS', value: '12,000 QPS', formula: 'Peak atomic upvote/downvote operations', description: 'Buffered write pipeline' }
+        { label: 'Read QPS', value: '80,000 QPS', formula: 'Peak subreddit and comment thread views', description: 'Read traffic that reaches the CDN and the app servers' },
+        { label: 'Vote Ingestion QPS', value: '12,000 QPS', formula: 'Peak atomic upvote/downvote operations', description: 'Peak votes per second, absorbed by a write buffer' }
       ],
-      conclusion: 'Write-behind vote batching in Redis is necessary to avoid hammering SQL databases with single-row increment locks.'
+      conclusion: 'Updating one SQL row for every vote would cause lock contention on popular posts. Buffering votes in Redis and writing totals to the database in batches avoids this. The cost is that the stored total lags behind by a few seconds, and a Redis crash can lose recent buffered votes unless each vote is also saved durably.'
     },
     architecture: {
-      summary: 'Clients communicate via CDN -> API Gateway -> Post & Comment Service -> PostgreSQL (stores relational posts and path-enumerated comment trees) -> Redis Cluster (caches Subreddit Hot lists as Sorted Sets & batches vote deltas) -> Async Kafka Worker flushes aggregated votes to DB.',
+      summary: 'Requests go through a CDN and an API Gateway to the Post Service and the Comment Service. PostgreSQL stores posts and comments (comments use a materialized path). Redis keeps each subreddit\'s Hot list as a sorted set and buffers vote counts. A background worker flushes the buffered votes to the database in batches.',
       nodes: [
-        { id: 'client', label: 'Web & Mobile Clients', type: 'client', x: 8, y: 50, description: 'Browses feeds and casts votes' },
-        { id: 'cdn', label: 'Edge CDN', type: 'cdn', x: 26, y: 70, description: 'Caches public subreddit feeds for 10-30 seconds', techStack: ['Fastly'] },
-        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 26, y: 30, description: 'Authentication and request routing', techStack: ['Envoy'] },
-        { id: 'post_srv', label: 'Post & Subreddit Service', type: 'service', x: 50, y: 30, description: 'Manages posts and calculates hot scores', techStack: ['Python / Go'] },
-        { id: 'comment_srv', label: 'Comment Tree Service', type: 'service', x: 50, y: 65, description: 'Fetches nested comment hierarchies', techStack: ['Go / Rust'] },
-        { id: 'redis_hot', label: 'Subreddit Redis ZSETs', type: 'cache', x: 75, y: 20, description: 'Stores subreddit_id -> post_ids scored by Hot rating', techStack: ['Redis Sorted Sets'] },
-        { id: 'redis_votes', label: 'Vote Buffer (Redis)', type: 'cache', x: 75, y: 45, description: 'Batches atomic vote deltas in memory', techStack: ['Redis Hashes'] },
-        { id: 'db', label: 'Relational Database', type: 'database', x: 75, y: 80, description: 'Primary store for posts, comments, and users', techStack: ['PostgreSQL with LTree extension'] }
+        { id: 'client', label: 'Web & Mobile Clients', type: 'client', x: 8, y: 50, description: 'Browse feeds and cast votes' },
+        { id: 'cdn', label: 'Edge CDN', type: 'cdn', x: 26, y: 70, description: 'Caches public subreddit feeds for 10 to 30 seconds. Logged-in pages are personal, so they are not cached this way.', techStack: ['Fastly'] },
+        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 26, y: 30, description: 'Checks authentication and routes requests', techStack: ['Envoy'] },
+        { id: 'post_srv', label: 'Post & Subreddit Service', type: 'service', x: 50, y: 30, description: 'Manages posts and computes Hot scores', techStack: ['Python / Go'] },
+        { id: 'comment_srv', label: 'Comment Tree Service', type: 'service', x: 50, y: 65, description: 'Loads nested comment threads', techStack: ['Go / Rust'] },
+        { id: 'redis_hot', label: 'Subreddit Redis ZSETs', type: 'cache', x: 75, y: 20, description: 'One sorted set per subreddit: post IDs ranked by Hot score', techStack: ['Redis Sorted Sets'] },
+        { id: 'redis_votes', label: 'Vote Buffer (Redis)', type: 'cache', x: 75, y: 45, description: 'Collects vote changes in memory until they are written to the database', techStack: ['Redis Hashes'] },
+        { id: 'db', label: 'Relational Database', type: 'database', x: 75, y: 80, description: 'Main store for posts, comments and users', techStack: ['PostgreSQL with LTree extension'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'cdn', label: 'GET /r/technology/hot', protocol: 'HTTPS' },
@@ -841,16 +846,16 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
         { id: 'e8', from: 'comment_srv', to: 'db', label: 'Query LTree Path Index', protocol: 'SQL' }
       ],
       flowSteps: [
-        { step: 1, title: 'Subreddit Hot Feed Fetch', description: 'User opens /r/programming. Post Service queries Redis Sorted Set using ZREVRANGE to get top 25 post IDs by Hot score.', activeNodes: ['client', 'gateway', 'post_srv', 'redis_hot'], highlightDetails: 'Retrieves top 25 ranked IDs in < 1ms.', latencyEstimate: '2ms' },
-        { step: 2, title: 'Nested Comment Tree Retrieval', description: 'When opening a post, Comment Service queries PostgreSQL using PostgreSQL LTree path enumeration (path <@ "root.c1.c4") to fetch entire subtree in a single indexed query.', activeNodes: ['client', 'comment_srv', 'db'], highlightDetails: 'Eliminates recursive N+1 database queries completely.', latencyEstimate: '18ms' },
-        { step: 3, title: 'Atomic Vote Ingestion & Decay', description: 'User upvotes a post. Server updates user vote record in DB and increments Redis vote buffer. Background cron recalculates Hot score: Score = log10(max(1, |U - D|)) + (created_at - Epoch) / 45000.', activeNodes: ['client', 'post_srv', 'redis_votes', 'redis_hot'], highlightDetails: 'Logarithmic score decay ensures older viral posts make way for fresh content.', latencyEstimate: '500ms' }
+        { step: 1, title: 'Load the Hot feed', description: 'A user opens /r/programming. The Post Service reads the top 25 post IDs from the subreddit\'s Redis sorted set (ZREVRANGE), which is ordered by Hot score.', activeNodes: ['client', 'gateway', 'post_srv', 'redis_hot'], highlightDetails: 'Reading the top entries of a sorted set is fast, usually well under a millisecond in Redis itself.', latencyEstimate: '2ms' },
+        { step: 2, title: 'Load a comment tree', description: 'When the user opens a post, the Comment Service runs one indexed query on the PostgreSQL ltree column (for example path <@ \'root.c1.c4\') to get a whole subtree.', activeNodes: ['client', 'comment_srv', 'db'], highlightDetails: 'One query replaces a chain of per-level queries. For very large threads, load the top levels first and fetch more on request ("load more comments").', latencyEstimate: '18ms' },
+        { step: 3, title: 'Record a vote', description: 'A user upvotes a post. The server saves the user\'s vote in the database, and adds the change to the Redis vote buffer. The post\'s Hot score is recomputed from its new vote total. Hot score = sign(U - D) * log10(max(|U - D|, 1)) + (created_at - epoch) / 45000, where U is upvotes, D is downvotes, and times are in seconds.', activeNodes: ['client', 'post_srv', 'redis_votes', 'redis_hot'], highlightDetails: 'The vote term grows slowly (each 10x in net votes adds 1 point). The time term adds 1 point every 45,000 seconds (12.5 hours), so a newer post needs fewer votes to outrank an older one. A post\'s score only changes when its votes change.', latencyEstimate: '500ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/api/v1/posts/{post_id}/vote',
-        description: 'Cast an upvote (1), downvote (-1), or unvote (0)',
+        description: 'Upvote (1), downvote (-1) or remove a vote (0)',
         requestBody: '{\n  "direction": 1\n}',
         responseBody: '{\n  "success": true,\n  "new_score": 14502\n}'
       }
@@ -869,33 +874,34 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
           { name: 'score', type: 'INT' },
           { name: 'created_at', type: 'TIMESTAMP' }
         ],
-        notes: 'PostgreSQL LTree extension allows single-query tree hierarchy retrieval with GIST indexes.'
+        notes: 'The PostgreSQL ltree extension stores each comment\'s ancestry as a path. A GiST index on the path lets one query return a whole subtree.'
       }
     ],
     deepDives: [
       {
-        title: 'Modeling Hierarchical Comment Trees: Adjacency List vs Materialized Path vs Nested Sets',
-        subtitle: 'Why Materialized Path (LTree) wins for social threaded discussions',
-        content: `Three Ways to Store Nested Comments:\n1. Adjacency List (parent_id on each row): Simple inserts, but reading a 10-level tree requires recursive CTE queries or 10 separate queries (slow).\n2. Nested Sets (lft and rgt numbers): Fast reads, but inserting a new comment requires renumbering thousands of sibling rows (catastrophic write locks under active discussions).\n3. Materialized Path (PostgreSQL LTree):\n   - Each comment stores its complete path ancestry: "1.42.89".\n   - Fetching all children of comment 42 is a simple indexed query: WHERE path <@ '1.42'.\n   - Inserting a reply to 89 is O(1): insert with path = "1.42.89.102".\n   - Sorting: Order by path asc renders the visual tree in perfect depth-first preorder traversal!`,
+        title: 'Storing comment trees: adjacency list, nested sets, or materialized path',
+        subtitle: 'Why a materialized path (ltree) suits threaded discussions',
+        content: `There are three common ways to store nested comments.\n1. Adjacency list (each row has a parent_id). Inserts are simple. Reading a deep tree needs a recursive query (a recursive CTE) or one query per level, which is slow.\n2. Nested sets (each row has left and right numbers). Reads are fast. But inserting a comment means renumbering many other rows, which causes heavy locking in an active thread.\n3. Materialized path (PostgreSQL ltree). Each comment stores its full ancestry, for example "1.42.89".\n   - All descendants of comment 42: WHERE path <@ '1.42', an indexed query.\n   - Inserting a reply to 89: write one row with path "1.42.89.102". No other rows change.\n   - Display order: ORDER BY path gives the tree in depth-first order. One catch: ltree compares labels as text, so "10" sorts before "9". Pad IDs to a fixed width (for example 000009) or use an encoding that sorts correctly.\n\nThe cost of a materialized path is that moving a whole subtree to a new parent means rewriting every path in it. Comment threads rarely move, so this is rare. A very large thread can still be too big for one response, so load the top levels first and fetch deeper replies on demand.`,
         keyTakeaways: [
-          'Materialized path provides O(1) inserts and single-query O(log N) subtree reads.',
-          'PostgreSQL GiST index on LTree paths scales to millions of comments per post.'
+          'A materialized path gives cheap inserts and a one-query subtree read that uses an index.',
+          'Pad path labels to a fixed width so that text sorting matches tree order.',
+          'Load large threads in parts. Do not send a whole huge tree in one response.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Vote Count Lock Contention on Viral Megathreads',
-        impact: '10,000 users upvote the same breaking news post within seconds, locking the SQL row.',
-        mitigation: 'Buffer vote deltas in Redis Hashes (HINCRBY) and flush batched increments to PostgreSQL every 5 seconds.'
+        bottleneck: 'Vote lock contention on a viral thread',
+        impact: '10,000 users upvote the same breaking-news post within seconds. Each vote updates the same SQL row, so the updates queue behind row locks.',
+        mitigation: 'Add vote changes to a Redis hash (HINCRBY) and write the batched totals to PostgreSQL every few seconds (for example 5). Also store each user\'s individual vote durably, so a Redis failure does not lose votes or allow double voting.'
       }
     ],
     interviewQA: [
       {
         question: 'How does Reddit prevent vote fuzzing and bot manipulation?',
-        hint: 'Displaying exact vote numbers encourages bots.',
-        goodAnswer: 'Reddit adds random noise / vote fuzzing (randomly displaying +/- 2-5 votes on each refresh) so bot operators cannot verify if their shadowbanned accounts are successfully altering vote tallies.',
-        pitfalls: 'Assuming displayed votes are 100% strict real-time numbers.'
+        hint: 'Showing exact vote counts helps bot operators check whether their votes count.',
+        goodAnswer: 'Reddit adds noise to the vote totals it displays ("vote fuzzing"), so a bot operator cannot tell from the number whether a particular vote was counted. Votes from spam or shadowbanned accounts can be ignored without telling the account owner. Together, these make it hard to test and tune a manipulation campaign. Rate limits and account-age checks add further protection.',
+        pitfalls: 'Assuming the displayed vote count is always the exact, real-time total.'
       }
     ],
     similarSystems: ['Hacker News', 'Stack Overflow', 'Discourse'],
@@ -905,57 +911,58 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
     id: 'pastebin-snippet',
     title: 'Design Pastebin / Gist (Secure Code Snippet Storage)',
     slug: 'pastebin-architecture',
-    tagline: 'High-throughput plain-text snippet storage with custom syntax highlighting, expiration TTLs, and deduplication.',
+    tagline: 'Store text and code snippets cheaply, share them by short URL, and delete them when they expire.',
     category: 'Social & Content',
     difficulty: 'Beginner',
     readTime: '14 min read',
     scaleSummary: {
       dau: '10 Million Active Users',
       qps: '15,000 Read QPS / 1,500 Write QPS',
-      storage: '2 TB / year text storage',
-      bandwidth: '30 MB/s Egress / 3 MB/s Ingress'
+      storage: '3.65 TB / year text storage',
+      bandwidth: '150 MB/s Egress / 15 MB/s Ingress'
     },
-    overview: 'Pastebin enables developers to paste plain text or source code snippets, receive a unique shortened URL, and share it with syntax highlighting, optional password protection, and custom expiration dates.',
+    overview: 'Pastebin lets developers paste text or source code and get a short URL to share. Pastes can have syntax highlighting, an optional password, and an expiry date. The main design idea is to keep small metadata in a database and the large text body in object storage.',
     keyChallenges: [
-      'Handling large code snippets (up to 10MB) efficiently without exhausting relational database row limits',
-      'Automated key expiration and scheduled garbage collection of millions of dead pastes',
-      'Preventing abuse and malware hosting using automated scanning',
-      'High-speed read caching for viral snippets'
+      'Storing snippets of up to 10 MB without bloating the relational database.',
+      'Deleting millions of expired pastes on time, in the database and in object storage.',
+      'Limiting abuse, such as malware hosting, with automated scanning.',
+      'Caching popular snippets so a viral paste does not overload storage.'
     ],
     functionalRequirements: [
-      'Create and save a new code paste (up to 10MB)',
-      'Generate a unique 8-character URL for each paste',
-      'Support expiration durations (10 min, 1 hour, 1 day, 1 month, Never)',
-      'Optional password protection and syntax highlighting detection',
-      'Delete or edit pastes for registered users'
+      'Create and save a paste of up to 10 MB.',
+      'Give each paste a unique 8-character URL.',
+      'Support expiry times: 10 minutes, 1 hour, 1 day, 1 month, or never.',
+      'Optional password protection, and syntax highlighting.',
+      'Let registered users edit and delete their pastes.'
     ],
     nonFunctionalRequirements: [
-      'Read latency < 25ms',
-      'High reliability: pastes must not be lost before expiration',
-      'Unpredictable paste keys (prevent URL scraping attacks)'
+      'Read latency under 25 ms.',
+      'Reliability: a paste must not be lost before it expires.',
+      'Unpredictable keys, so nobody can find pastes by guessing URLs.'
     ],
-    outOfScope: ['Real-time collaborative code execution (IDE playground)', 'Git version control branching'],
+    outOfScope: ['Running code online (an IDE playground).', 'Git-style version control and branching.'],
     capacityEstimations: {
       assumptions: [
-        '10M daily users; 1M new pastes created per day (~12 writes/sec avg, 1,500 peak QPS)',
-        '10M paste reads per day (~115 reads/sec avg, 15,000 peak QPS)',
-        'Average paste size: 10 KB; Maximum paste size: 10 MB'
+        '10M daily users; 1M new pastes per day: about 12 writes/s on average and 1,500/s at peak.',
+        '10M paste reads per day: about 115 reads/s on average and 15,000/s at peak.',
+        'An average paste is 10 KB. The maximum is 10 MB.',
+        'Peak bandwidth: 15,000 reads * 10 KB = 150 MB/s out, and 1,500 writes * 10 KB = 15 MB/s in. Storage is one copy, before replication.'
       ],
       metrics: [
-        { label: 'Storage Growth', value: '10 GB / day', formula: '1M pastes/day * 10 KB average size', description: 'Object storage capacity growth' },
-        { label: '5-Year Storage Total', value: '18.25 TB', formula: '10 GB/day * 365 * 5 years', description: 'Total durable S3 storage' }
+        { label: 'Storage Growth', value: '10 GB / day', formula: '1M pastes/day * 10 KB average size', description: 'New data per day in object storage' },
+        { label: '5-Year Storage Total', value: '18.25 TB', formula: '10 GB/day * 365 * 5 years', description: 'Total in durable object storage (S3), if nothing expired' }
       ],
-      conclusion: 'Store paste metadata in PostgreSQL or DynamoDB, and store the actual snippet body in S3/MinIO object storage.'
+      conclusion: 'Keep paste metadata in PostgreSQL or DynamoDB, and keep the snippet text in S3 or MinIO object storage. The totals are small, so the design is about keeping the database lean and cleaning up expired data.'
     },
     architecture: {
-      summary: 'Clients query API Gateway -> Paste Service -> S3 / MinIO (stores text content) -> PostgreSQL (indexes metadata: key, size, author, expiration) -> Redis (caches top 20% viral snippets) -> Background Cleaner removes expired S3 objects.',
+      summary: 'Clients call the API Gateway, which forwards to the Paste Service. The service writes the text body to S3 (or MinIO) and the metadata (key, size, owner, expiry) to PostgreSQL. Redis caches popular snippets. A background cleaner removes expired pastes from both stores.',
       nodes: [
-        { id: 'client', label: 'Client (Web / CLI / cURL)', type: 'client', x: 8, y: 50, description: 'Submits or reads code snippets' },
-        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 28, y: 50, description: 'Rate limits abusive IPs and checks auth', techStack: ['Envoy'] },
-        { id: 'paste_srv', label: 'Paste Service', type: 'service', x: 50, y: 50, description: 'Handles Base62 generation & encryption', techStack: ['Go / Node.js'] },
-        { id: 'redis', label: 'Snippet Cache (Redis)', type: 'cache', x: 75, y: 25, description: 'Caches recent and viral pastes', techStack: ['Redis'] },
-        { id: 's3', label: 'Object Storage (S3 / Blob)', type: 'storage', x: 75, y: 50, description: 'Durable storage for raw code text files', techStack: ['AWS S3 / MinIO'] },
-        { id: 'db', label: 'Metadata Database', type: 'database', x: 75, y: 75, description: 'Indexes paste_id, user_id, expiry, syntax', techStack: ['PostgreSQL / DynamoDB'] }
+        { id: 'client', label: 'Client (Web / CLI / cURL)', type: 'client', x: 8, y: 50, description: 'Submits and reads snippets' },
+        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 28, y: 50, description: 'Rate limits abusive IPs and checks authentication', techStack: ['Envoy'] },
+        { id: 'paste_srv', label: 'Paste Service', type: 'service', x: 50, y: 50, description: 'Generates Base62 keys and handles encrypted pastes', techStack: ['Go / Node.js'] },
+        { id: 'redis', label: 'Snippet Cache (Redis)', type: 'cache', x: 75, y: 25, description: 'Caches recent and popular pastes', techStack: ['Redis'] },
+        { id: 's3', label: 'Object Storage (S3 / Blob)', type: 'storage', x: 75, y: 50, description: 'Durable storage for the paste text', techStack: ['AWS S3 / MinIO'] },
+        { id: 'db', label: 'Metadata Database', type: 'database', x: 75, y: 75, description: 'Stores paste_id, user_id, expiry and syntax for each paste', techStack: ['PostgreSQL / DynamoDB'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'gateway', label: 'POST /api/v1/pastes', protocol: 'HTTPS' },
@@ -967,8 +974,8 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
         { id: 'e7', from: 'paste_srv', to: 'redis', label: 'Cache Lookup', protocol: 'TCP' }
       ],
       flowSteps: [
-        { step: 1, title: 'Create New Paste', description: 'Client sends code snippet. Paste Service generates Base62 key, writes body to S3 bucket, and inserts metadata row into DB.', activeNodes: ['client', 'gateway', 'paste_srv', 's3', 'db'], highlightDetails: 'Separating metadata from text body keeps DB indexes compact and fast.', latencyEstimate: '20ms' },
-        { step: 2, title: 'Retrieve Paste with Caching', description: 'User visits https://pastebin.com/k9a8x2. Server checks Redis cache. On hit, returns text immediately. On miss, fetches from S3 and populates Redis.', activeNodes: ['client', 'gateway', 'paste_srv', 'redis', 's3'], highlightDetails: 'Sub-10ms response time on cache hit.', latencyEstimate: '8ms' }
+        { step: 1, title: 'Create a paste', description: 'The client sends a snippet. The Paste Service creates a Base62 key, writes the text to S3, and inserts a metadata row into the database.', activeNodes: ['client', 'gateway', 'paste_srv', 's3', 'db'], highlightDetails: 'Keeping the text out of the database keeps rows and indexes small. Write the S3 object first. If the database insert then fails, the cleaner can remove the orphan object later.', latencyEstimate: '20ms' },
+        { step: 2, title: 'Read a paste', description: 'A user opens https://pastebin.com/k9a8x2. The server checks Redis. On a hit it returns the text. On a miss it loads the text from S3 and stores it in Redis.', activeNodes: ['client', 'gateway', 'paste_srv', 'redis', 's3'], highlightDetails: 'A cache hit avoids the S3 request and is much faster. Check the expiry time before returning any paste.', latencyEstimate: '8ms' }
       ]
     },
     apiDesign: [
@@ -994,33 +1001,33 @@ export const SOCIAL_CASE_STUDIES: CaseStudy[] = [
           { name: 'expire_at', type: 'TIMESTAMP', isIndex: true },
           { name: 'created_at', type: 'TIMESTAMP' }
         ],
-        notes: 'PostgreSQL database with B-Tree index on (expire_at) for efficient batch cleanup.'
+        notes: 'PostgreSQL. A B-tree index on expire_at lets the cleaner find expired pastes quickly.'
       }
     ],
     deepDives: [
       {
-        title: 'Why Storing Text Blobs in SQL Degrades Database Performance',
-        subtitle: 'The Architectural rule of Metadata vs Body Separation',
-        content: `Relational databases store table rows in fixed-size 8KB disk pages (PostgreSQL pages). When a row exceeds page size (e.g. a 5MB code snippet), PostgreSQL must use TOAST (The Oversized-Attribute Storage Technique), breaking the data into multiple physical chunks across out-of-line tables.\n\nConsequences:\n- Database buffer pool (RAM) gets polluted with large cold text blobs instead of indexing metadata.\n- Database backups (pg_dump) take 10x longer.\n- Database IOPS spike on simple metadata lookups.\n\nSolution: Store only metadata in PostgreSQL (300 bytes per row) and store the snippet payload in AWS S3 or MinIO. S3 is designed specifically for cheap, high-throughput blob storage.`,
+        title: 'Why large text should not live in the SQL database',
+        subtitle: 'Keep metadata in the database and the body in object storage',
+        content: `PostgreSQL stores rows in 8 KB pages. A value larger than about 2 KB is moved out of the row by TOAST (The Oversized-Attribute Storage Technique): PostgreSQL compresses it and stores it in chunks in a separate table. PostgreSQL can hold values up to 1 GB this way, so a 10 MB paste would work. The problem is cost, not a hard limit:\n- The database grows by terabytes of text, which is much more expensive than object storage.\n- Backups, restores and replication have to copy all that text.\n- Reading a large value ties up a database connection while the data streams out.\n- Large rows inflate the write-ahead log (WAL) and the work of vacuuming.\n\nA better split: keep only metadata in PostgreSQL (a few hundred bytes per row) and keep the snippet text in S3 or MinIO, which is built for cheap, durable storage of large objects.`,
         keyTakeaways: [
-          'Keep database rows small (< 1KB) so millions of index pages fit in server RAM.',
-          'Use Object Storage (S3) for all payloads > 64KB.'
+          'Keep database rows small so the indexes stay compact and cached in memory.',
+          'Store large payloads (for example anything over a few tens of KB) in object storage and keep only a pointer in the database.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Accumulation of Millions of Expired Pastes',
-        impact: 'Dead pastes waste terabytes of storage.',
-        mitigation: 'Use S3 Object Lifecycle Expiration rules to auto-delete objects after expiration timestamp, and run an hourly DB cron: DELETE FROM pastes WHERE expire_at < NOW() LIMIT 10000.'
+        bottleneck: 'Millions of expired pastes pile up',
+        impact: 'Dead pastes waste storage and make indexes larger.',
+        mitigation: 'Run a cleaner job (for example hourly). It finds expired rows by the expire_at index, deletes their S3 objects, then deletes the rows, in small batches (for example 10,000 rows at a time). An S3 lifecycle rule can act as a backup. Lifecycle rules work by object age or tag, in whole days, so they cannot match every custom expiry. Always check expire_at when serving a paste, because cleanup can lag behind.'
       }
     ],
     interviewQA: [
       {
         question: 'How do you handle password-protected pastes safely?',
-        hint: 'Never store plain passwords or decrypt server-side if zero-knowledge is required.',
-        goodAnswer: 'Derive an AES-256 decryption key from the password client-side using PBKDF2/Argon2. The server only stores the encrypted ciphertext and cannot read the snippet without the user password.',
-        pitfalls: 'Storing passwords in plain text in the database.'
+        hint: 'Never store a plain-text password. Decide whether the server may read the text.',
+        goodAnswer: 'There are two options. (1) Server-side check: store only a slow salted hash of the password (bcrypt or Argon2), and check it before returning the paste. This is simple, but the server can still read the text. (2) Client-side encryption: the browser derives an AES-256 key from the password (with PBKDF2 or Argon2) and uploads only ciphertext, so the server cannot read the snippet. The cost is that the server cannot do syntax detection or scanning for abuse on the text, and a forgotten password means the paste is lost. Choose option 2 when users need privacy even from the service.',
+        pitfalls: 'Storing passwords in plain text, or in a fast unsalted hash such as plain SHA-256.'
       }
     ],
     similarSystems: ['GitHub Gist', 'Ghostbin', 'Hastebin'],

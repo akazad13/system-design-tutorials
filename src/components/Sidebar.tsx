@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { FUNDAMENTAL_TOPICS } from '../data/fundamentals';
 import { ALL_CASE_STUDIES, CASE_STUDY_CATEGORIES } from '../data/case-studies-index';
 import { 
@@ -15,6 +15,7 @@ import {
   Award,
   Sparkles
 } from 'lucide-react';
+import { shortTitle, searchShortcutLabel } from '../lib/display';
 
 interface SidebarProps {
   activeType: 'fundamental' | 'case-study';
@@ -46,6 +47,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('All Categories');
   const [filterText, setFilterText] = useState('');
   const [localBookmarksOnly, setLocalBookmarksOnly] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Close the mobile drawer with Escape and stop the page behind it from scrolling
+  useEffect(() => {
+    if (!isOpenMobile) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseMobile();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpenMobile, onCloseMobile]);
+
+  // Keep the active topic visible in the list (for example after deep links or next/previous)
+  useEffect(() => {
+    const active = listRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    active?.scrollIntoView({ block: 'nearest' });
+  }, [activeId]);
 
   // Sync with external or internal bookmark filter
   const showBookmarksOnly = isSavedOnlyActive || localBookmarksOnly;
@@ -89,6 +112,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case 'Advanced': return 'bg-rose-500';
       default: return 'bg-neutral-400';
     }
+  };
+
+  const hasActiveFilters = filterText !== '' || selectedCategory !== 'All Categories' || showBookmarksOnly;
+  const noResults = filteredFundamentals.length === 0 && filteredCaseStudies.length === 0;
+
+  const handleClearFilters = () => {
+    setFilterText('');
+    setSelectedCategory('All Categories');
+    if (showBookmarksOnly) handleToggleBookmarkFilter();
   };
 
   const handleToggleBookmarkFilter = () => {
@@ -148,12 +180,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="text"
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
-            placeholder="Filter 10 modules & 28 studies..."
+            placeholder={`Filter ${FUNDAMENTAL_TOPICS.length} fundamentals & ${ALL_CASE_STUDIES.length} case studies...`}
+            aria-label="Filter topics"
             className="w-full bg-white dark:bg-[#131722] border border-neutral-200 dark:border-neutral-800 rounded-lg pl-8 pr-7 py-1.5 text-xs text-neutral-800 dark:text-neutral-200 placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400 font-sans transition-all"
           />
           {filterText && (
             <button
               onClick={() => setFilterText('')}
+              aria-label="Clear filter text"
               className="absolute right-2 top-2 p-0.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-white rounded"
             >
               <X className="w-3.5 h-3.5" />
@@ -166,6 +200,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
+            aria-label="Case study category"
             className="w-full bg-white dark:bg-[#131722] border border-neutral-200 dark:border-neutral-800 rounded-lg py-1.5 px-2.5 text-xs text-neutral-700 dark:text-neutral-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400 font-sans"
           >
             {CASE_STUDY_CATEGORIES.map((cat) => (
@@ -198,11 +233,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Scrollable Topic Tree */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-4">
+      <div ref={listRef} className="flex-1 overflow-y-auto p-3 space-y-4">
+        {noResults && (
+          <div className="px-3 py-8 text-center space-y-3">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 font-sans">
+              No topics match your filters.
+            </p>
+            {hasActiveFilters && (
+              <button
+                onClick={handleClearFilters}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-[#131722] border border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-200 hover:border-indigo-400 transition-colors cursor-pointer"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Section 1: Fundamentals */}
-        <div className="space-y-1">
+        <div className={`space-y-1 ${filteredFundamentals.length === 0 ? 'hidden' : ''}`}>
           <button
             onClick={() => setFundamentalsExpanded(!fundamentalsExpanded)}
+            aria-expanded={fundamentalsExpanded}
             className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-200/40 dark:hover:bg-neutral-800/40 transition-colors"
           >
             <div className="flex items-center gap-2">
@@ -222,6 +274,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 return (
                   <button
                     key={topic.id}
+                    aria-current={isActive ? 'page' : undefined}
                     onClick={() => {
                       onSelect('fundamental', topic.id);
                       onCloseMobile();
@@ -241,7 +294,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </span>
                       )}
                       <span className="truncate font-sans">
-                        {topic.title.replace('System Design: ', '')}
+                        {shortTitle(topic.title)}
                       </span>
                     </div>
 
@@ -263,9 +316,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Section 2: Case Studies */}
-        <div className="space-y-1">
+        <div className={`space-y-1 ${filteredCaseStudies.length === 0 ? 'hidden' : ''}`}>
           <button
             onClick={() => setCaseStudiesExpanded(!caseStudiesExpanded)}
+            aria-expanded={caseStudiesExpanded}
             className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-200/40 dark:hover:bg-neutral-800/40 transition-colors"
           >
             <div className="flex items-center gap-2">
@@ -285,6 +339,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 return (
                   <button
                     key={cs.id}
+                    aria-current={isActive ? 'page' : undefined}
+                    title={cs.title}
                     onClick={() => {
                       onSelect('case-study', cs.id);
                       onCloseMobile();
@@ -302,7 +358,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <span className={`w-1.5 h-1.5 rounded-full ${getDifficultyDot(cs.difficulty)} flex-shrink-0`} />
                       )}
                       <span className="truncate font-sans">
-                        {cs.title.replace('Design ', '').replace('a ', '').replace('an ', '').split('(')[0]}
+                        {shortTitle(cs.title)}
                       </span>
                     </div>
 
@@ -330,7 +386,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Sparkles className="w-3 h-3 text-indigo-500" /> High-Scale Systems
         </span>
         <kbd className="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-[10px] border border-neutral-200 dark:border-neutral-700">
-          ⌘K
+          {searchShortcutLabel()}
         </kbd>
       </div>
     </aside>
@@ -345,11 +401,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Mobile Drawer */}
       {isOpenMobile && (
-        <div className="fixed inset-0 z-40 lg:hidden flex">
+        <div className="fixed inset-0 z-40 lg:hidden flex" role="dialog" aria-modal="true" aria-label="Topic navigation">
           <div className="fixed inset-0 bg-neutral-900/60 backdrop-blur-xs transition-opacity" onClick={onCloseMobile} />
           <div className="relative z-50 w-80 max-w-[85vw] h-full shadow-2xl">
             {content}
           </div>
+          <button
+            onClick={onCloseMobile}
+            aria-label="Close navigation menu"
+            className="relative z-50 self-start m-3 p-2 rounded-full bg-white/90 dark:bg-neutral-800/90 text-neutral-700 dark:text-neutral-200 shadow-md cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </>

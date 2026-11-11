@@ -5,63 +5,63 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
     id: 'whatsapp-chat',
     title: 'Design WhatsApp / WeChat (Global Messaging Service)',
     slug: 'whatsapp-messaging',
-    tagline: 'Ultra-low latency 1:1 and group chat supporting billions of active WebSocket connections, message statuses, and offline queues.',
+    tagline: 'Deliver 1:1 and group messages in real time to hundreds of millions of connected phones, track delivery receipts, and hold messages for phones that are offline.',
     category: 'Messaging & Real-time',
     difficulty: 'Advanced',
     readTime: '24 min read',
     scaleSummary: {
       dau: '2 Billion Daily Active Users',
-      qps: '1,500,000 Messages / sec (Peak 3,000,000 msg/sec)',
+      qps: '1,160,000 Messages / sec avg (Peak 3,000,000 msg/sec)',
       storage: '100 Billion messages / day (Temporary buffer & durable archive)',
       bandwidth: '50 GB/s Real-Time WebSocket Egress'
     },
-    overview: 'WhatsApp provides instant peer-to-peer messaging, group chats, delivery status receipts (sent, delivered, read), and offline message queuing. The system maintains millions of concurrent persistent bidirectional TCP/WebSocket connections per server using Erlang/Go/Netty architectures.',
+    overview: 'A messaging service sends 1:1 and group messages, shows delivery receipts (sent, delivered, read), and holds messages for people who are offline. Every online phone keeps one long-lived connection open to a gateway server, so the server can push a message the moment it arrives. Each gateway server holds a very large number of these idle connections, so it needs a runtime built for that job, such as Erlang (which WhatsApp uses), Go or Netty.',
     keyChallenges: [
-      'Maintaining 500M+ persistent bidirectional TCP / WebSocket connections simultaneously without memory exhaustion',
-      'Reliable message delivery with exactly-once perception and offline queue delivery upon reconnection',
-      'Group Chat message fanout (e.g. 1 message sent to a 1,024-member group) without cascading gateway lag',
-      'End-to-End Encryption (Signal Protocol) key exchange and multi-device state synchronization'
+      'Hold about 500 million long-lived connections at once. Each connection uses memory, so the design must keep per-connection cost small.',
+      'Deliver every message reliably. The network can drop a message, so the system delivers at least once and the receiving app removes duplicates. Messages for offline users wait in a queue until the phone reconnects.',
+      'Send one message to a large group (up to 1,024 members) without overloading the gateways.',
+      'Keep messages end-to-end encrypted (Signal Protocol), which means the server cannot read them. Keys must also work across a user\'s several devices.'
     ],
     functionalRequirements: [
-      '1:1 real-time text, voice note, and media messaging',
-      'Group chats with up to 1,024 participants',
-      'Message status receipts (Single tick = Sent, Double grey = Delivered to device, Double blue = Read)',
-      'Offline message storage and replay upon reconnecting',
-      'User online presence status and typing indicators'
+      'Send 1:1 text, voice notes and media in real time.',
+      'Support group chats with up to 1,024 participants.',
+      'Show message receipts: one tick means the server has it, two grey ticks mean it reached the recipient\'s device, two blue ticks mean it was read.',
+      'Store messages for offline users and deliver them when they reconnect.',
+      'Show online presence and typing indicators.'
     ],
     nonFunctionalRequirements: [
-      'Sub-100ms end-to-end delivery latency over mobile 4G/5G',
-      'Zero message loss under network disconnections',
-      'End-to-End Encryption (E2EE) ensuring zero server-side plaintext visibility',
-      '99.999% Gateway Availability'
+      'Low delivery latency: a message to an online user should arrive in well under a second on a mobile network.',
+      'No lost messages: a message is kept until the recipient\'s device confirms it, even if connections drop.',
+      'End-to-end encryption (E2EE): servers carry only ciphertext and never see message content.',
+      'Very high availability of the gateway layer (a target of 99.999%).'
     ],
-    outOfScope: ['VoIP Group Calling SFU', 'In-App Payment Gateway'],
+    outOfScope: ['Group voice and video calling (SFU media servers)', 'In-app payments'],
     capacityEstimations: {
       assumptions: [
-        '2 Billion DAU; 100 Billion messages sent per day = ~1.15M msg/sec avg (3M peak msg/sec)',
-        'Active persistent connections: 500 Million concurrent connections',
-        'Average message size: 200 bytes text / 100 KB media thumbnail',
-        'RAM per open WebSocket connection: ~10 KB (500M * 10KB = 5 TB Gateway RAM total across 500 servers)'
+        '2 billion daily users send 100 billion messages per day. That is about 1.15 million messages/s on average and about 3 million/s at peak.',
+        'Concurrent connections: 500 million.',
+        'Average message size: 200 bytes of text. A media message carries only a small thumbnail (about 100 KB) and a pointer. The file itself goes to object storage.',
+        'Each open WebSocket needs about 10 KB of RAM. 500M × 10 KB = 5 TB of RAM across the gateway fleet, or about 500 servers at 1 million connections each.'
       ],
       metrics: [
-        { label: 'Message Ingestion Rate', value: '3,000,000 msg/sec', formula: '100B / 86,400 * 2.5x peak burst', description: 'Peak incoming chat messages' },
-        { label: 'Concurrent Connections', value: '500,000,000', formula: 'Active mobile sockets maintained', description: 'Distributed Gateway Connection Pool' },
-        { label: 'Temporary Offline Store', value: '20 TB RAM/SSD', formula: 'Undelivered messages buffered for 30 days', description: 'Redis / Cassandra offline inbox' }
+        { label: 'Message Ingestion Rate', value: '3,000,000 msg/sec', formula: '100B / 86,400 * 2.5x peak burst', description: 'Peak rate of incoming messages' },
+        { label: 'Concurrent Connections', value: '500,000,000', formula: 'Active mobile sockets maintained', description: 'Connections spread across the gateway fleet' },
+        { label: 'Temporary Offline Store', value: '20 TB RAM/SSD', formula: 'Undelivered messages buffered for 30 days', description: 'Offline inbox in Cassandra or Redis for undelivered messages' }
       ],
-      conclusion: 'A stateful Gateway Cluster tracking User ID -> Gateway Server IP mappings in a distributed Redis session registry is required.'
+      conclusion: 'The gateways are stateful, because each one holds live sockets. A fast shared session registry (Redis) must record which gateway each user is connected to, so any gateway can find the right one for a recipient.'
     },
     architecture: {
-      summary: 'Clients maintain TLS WebSocket connections to Chat Gateway Servers (Erlang/Go). When User A sends a message to User B, Gateway checks Redis Session Store for User B Gateway IP. If online, routes via internal gRPC to User B Gateway. If offline, stores in Cassandra/Redis Offline Inbox. Media is uploaded to S3 and sent as encrypted thumbnail pointers.',
+      summary: 'Each phone keeps a TLS WebSocket connection to a chat gateway. When User A sends a message to User B, A\'s gateway looks up B\'s gateway in the Redis session registry. If B is online, A\'s gateway forwards the message to B\'s gateway over internal gRPC, and B\'s gateway pushes it down B\'s socket. If B is offline, the message goes to the offline inbox (Cassandra) and a push notification wakes B\'s phone. Media files go to object storage (S3), and the message carries only an encrypted pointer and thumbnail.',
       nodes: [
-        { id: 'client_a', label: 'User A (Sender)', type: 'client', x: 8, y: 30, description: 'Maintains long-lived WebSocket connection' },
-        { id: 'client_b', label: 'User B (Recipient)', type: 'client', x: 8, y: 70, description: 'Receives real-time push message' },
-        { id: 'lb', label: 'Layer 4 Load Balancer', type: 'load_balancer', x: 26, y: 50, description: 'TCP NLB distributing WebSocket handshakes', techStack: ['AWS NLB / IPVS'] },
-        { id: 'chat_gw_1', label: 'Chat Gateway #1', type: 'gateway', x: 45, y: 30, description: 'Holds active socket for User A', techStack: ['Erlang / Go / Netty'], scaleMetric: '1M sockets / node' },
-        { id: 'chat_gw_2', label: 'Chat Gateway #2', type: 'gateway', x: 45, y: 70, description: 'Holds active socket for User B', techStack: ['Erlang / Go / Netty'] },
-        { id: 'session_store', label: 'Session Registry (Redis)', type: 'cache', x: 68, y: 50, description: 'Maps user_id -> gateway_server_ip:port', techStack: ['Redis Cluster'], scaleMetric: '500M keys in RAM' },
-        { id: 'msg_service', label: 'Message & Group Service', type: 'service', x: 68, y: 20, description: 'Handles group fanout and deduplication', techStack: ['Java / Go'] },
-        { id: 'offline_store', label: 'Offline Message Inbox', type: 'database', x: 88, y: 50, description: 'Buffers messages for disconnected devices', techStack: ['Apache Cassandra / RocksDB'] },
-        { id: 'push_service', label: 'Push Notification Engine', type: 'worker', x: 88, y: 80, description: 'Triggers Apple APNs / Google FCM when offline', techStack: ['APNs / FCM Gateway'] }
+        { id: 'client_a', label: 'User A (Sender)', type: 'client', x: 8, y: 30, description: 'Keeps one long-lived WebSocket connection open' },
+        { id: 'client_b', label: 'User B (Recipient)', type: 'client', x: 8, y: 70, description: 'Receives pushed messages over its own socket' },
+        { id: 'lb', label: 'Layer 4 Load Balancer', type: 'load_balancer', x: 26, y: 50, description: 'Spreads new TCP connections across gateways. It does not read the traffic.', techStack: ['AWS NLB / IPVS'] },
+        { id: 'chat_gw_1', label: 'Chat Gateway #1', type: 'gateway', x: 45, y: 30, description: 'Holds the open socket for User A', techStack: ['Erlang / Go / Netty'], scaleMetric: '1M sockets / node' },
+        { id: 'chat_gw_2', label: 'Chat Gateway #2', type: 'gateway', x: 45, y: 70, description: 'Holds the open socket for User B', techStack: ['Erlang / Go / Netty'] },
+        { id: 'session_store', label: 'Session Registry (Redis)', type: 'cache', x: 68, y: 50, description: 'Maps user_id to the gateway (ip:port) that holds the user\'s socket', techStack: ['Redis Cluster'], scaleMetric: '500M keys in RAM' },
+        { id: 'msg_service', label: 'Message & Group Service', type: 'service', x: 68, y: 20, description: 'Expands group messages to each member and removes duplicates', techStack: ['Java / Go'] },
+        { id: 'offline_store', label: 'Offline Message Inbox', type: 'database', x: 88, y: 50, description: 'Holds messages for devices that are not connected', techStack: ['Apache Cassandra / RocksDB'] },
+        { id: 'push_service', label: 'Push Notification Engine', type: 'worker', x: 88, y: 80, description: 'Sends a push through Apple APNs or Google FCM when the user is offline', techStack: ['APNs / FCM Gateway'] }
       ],
       edges: [
         { id: 'e1', from: 'client_a', to: 'chat_gw_1', label: '1. Send Message', protocol: 'WebSocket' },
@@ -73,17 +73,17 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
         { id: 'e7', from: 'chat_gw_1', to: 'push_service', label: 'If Offline: Trigger Push', protocol: 'Internal RPC', isAsync: true }
       ],
       flowSteps: [
-        { step: 1, title: 'Client WebSocket Connection', description: 'Client establishes secure WSS connection via L4 Load Balancer to Chat Gateway. Gateway registers user_id -> gateway_ip in Redis Session Store with a 60s heartbeat lease.', activeNodes: ['client_a', 'lb', 'chat_gw_1', 'session_store'], highlightDetails: 'L4 NLB passes TCP connection transparently to gateway nodes.', latencyEstimate: '30ms' },
-        { step: 2, title: 'Session Lookup & gRPC Hop', description: 'User A sends encrypted message to User B. Chat Gateway #1 queries Redis: User B is connected to Chat Gateway #2. Gateway #1 forwards payload via high-speed internal gRPC.', activeNodes: ['chat_gw_1', 'session_store', 'chat_gw_2'], highlightDetails: 'Sub-millisecond internal routing hop between gateway pods.', latencyEstimate: '2ms' },
-        { step: 3, title: 'Real-Time Delivery & ACK Loop', description: 'Gateway #2 pushes packet down User B WebSocket. User B client receives packet and sends back ACK payload. Gateway #2 routes ACK back to Gateway #1 -> User A sees Double Grey Ticks.', activeNodes: ['chat_gw_2', 'client_b', 'chat_gw_1', 'client_a'], highlightDetails: 'Guarantees reliable at-least-once delivery with client de-duplication.', latencyEstimate: '45ms' },
-        { step: 4, title: 'Offline Fallback & Apple/Google Push', description: 'If User B has no active session, message is saved to Cassandra Offline Inbox with a 30-day TTL, and a silent push notification is dispatched via Apple APNs / Google FCM.', activeNodes: ['chat_gw_1', 'offline_store', 'push_service'], highlightDetails: 'When User B wakes up and reconnects, client pulls all unread messages in order.', latencyEstimate: '15ms' }
+        { step: 1, title: 'Client opens a WebSocket connection', description: 'The phone opens a secure WSS connection through the Layer 4 load balancer to a chat gateway. The gateway records user_id to gateway_ip in the Redis session registry. The entry expires after 60 seconds unless heartbeats renew it.', activeNodes: ['client_a', 'lb', 'chat_gw_1', 'session_store'], highlightDetails: 'The Layer 4 load balancer forwards the TCP connection without reading it. After that, the phone talks to its gateway directly.', latencyEstimate: '30ms' },
+        { step: 2, title: 'Find the recipient and forward', description: 'User A sends an encrypted message for User B. Gateway #1 asks Redis where B is connected and learns it is Gateway #2. Gateway #1 forwards the message to Gateway #2 over internal gRPC.', activeNodes: ['chat_gw_1', 'session_store', 'chat_gw_2'], highlightDetails: 'The hop between gateways stays inside the datacenter, so it adds only a few milliseconds.', latencyEstimate: '2ms' },
+        { step: 3, title: 'Deliver to B and return the receipt', description: 'Gateway #2 pushes the message down B\'s WebSocket. B\'s app sends an ACK (acknowledgment). Gateway #2 passes the ACK back to Gateway #1, and User A sees two grey ticks.', activeNodes: ['chat_gw_2', 'client_b', 'chat_gw_1', 'client_a'], highlightDetails: 'If an ACK is lost, the sender retries. That gives at-least-once delivery, and the receiving app drops duplicates by message ID.', latencyEstimate: '45ms' },
+        { step: 4, title: 'Store the message if the recipient is offline', description: 'If B has no active session, the gateway saves the message in the Cassandra offline inbox with a 30-day TTL (time to live) and asks the push engine to send an Apple APNs or Google FCM notification.', activeNodes: ['chat_gw_1', 'offline_store', 'push_service'], highlightDetails: 'When B reconnects, the app pulls its waiting messages in order. The server deletes each one after the device confirms it.', latencyEstimate: '15ms' }
       ]
     },
     apiDesign: [
       {
         method: 'WS',
         path: '/ws/v1/chat',
-        description: 'Persistent bidirectional WebSocket channel',
+        description: 'One long-lived two-way WebSocket channel. The client sends messages and ACKs here, and the server pushes messages back.',
         requestBody: '{\n  "action": "SEND_MSG",\n  "msg_id": "m_102938475",\n  "recipient_id": "usr_8821",\n  "encrypted_payload": "a8x9z...[E2EE Ciphertext]",\n  "timestamp": 1724000000\n}',
         responseBody: '{\n  "action": "ACK_SERVER",\n  "msg_id": "m_102938475",\n  "status": "SENT_TO_SERVER"\n}'
       }
@@ -100,33 +100,34 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
           { name: 'encrypted_content', type: 'BLOB' },
           { name: 'created_at', type: 'TIMESTAMP' }
         ],
-        notes: 'Cassandra table storing transient undelivered messages. Once delivered, rows are deleted.'
+        notes: 'Cassandra table for messages not yet delivered. One partition per recipient, ordered by message_id, so a reconnecting phone reads its whole inbox in one query. Rows are deleted after delivery.'
       }
     ],
     deepDives: [
       {
-        title: 'Group Chat Fanout Architecture: Client Fanout vs Server Fanout',
-        subtitle: 'How WhatsApp handles groups with 1,024 members efficiently',
-        content: `When a message is posted in a group with 500 members:\n1. Client Fanout: Sender device encrypts and transmits 500 individual messages over cellular network. Result: Terrible sender battery and mobile data usage!\n2. Server Fanout with Sender Keys (WhatsApp Architecture):\n   - The sender encrypts the message ONCE using a symmetric Group Sender Key and transmits 1 single packet to the Chat Gateway.\n   - The Message Service queries Group Membership in Redis, resolves the Gateway IP for each of the 500 members, and fans out 500 internal packets over high-speed 100Gbps datacenter networks.\n   - Each recipient decrypts the message locally using their cached Group Sender Key.`,
+        title: 'Group chat fanout: client fanout vs server fanout',
+        subtitle: 'How groups of up to 1,024 members stay cheap for the sender',
+        content: `Fanout means turning one message into one copy per recipient. Take a group of 500 members.\n\n1. Client fanout: the sender's phone encrypts and uploads 500 separate copies. This drains the sender's battery and mobile data.\n2. Server fanout with Sender Keys (the approach WhatsApp uses for groups):\n   - Each member first shares a Sender Key (a symmetric key for that member's messages in the group) with every other member, through the existing encrypted 1:1 sessions.\n   - To send, the phone encrypts the message once with its Sender Key and uploads one packet to its gateway.\n   - The Message Service reads the group's member list, finds each member's gateway through the session registry, and sends one internal copy per member. The internal network inside the datacenter is far faster and cheaper than a phone's cellular link.\n   - Each recipient decrypts with the sender's Sender Key that they stored earlier.\n\nThe cost is key management. When a member leaves, the remaining members must create new Sender Keys, or the departed member could keep decrypting new messages.`,
         keyTakeaways: [
-          'Server-side fanout minimizes client bandwidth to a single upload.',
-          'Sender Keys preserve end-to-end encryption without requiring 500 separate client encryptions.'
+          'Server fanout means the sender uploads once, whatever the group size.',
+          'Sender Keys keep groups end-to-end encrypted without encrypting separately for every member.',
+          'Sender Keys must be rotated when membership changes.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Gateway Node Crash / Thundering Herd on Reconnection',
-        impact: 'If a gateway node holding 1M connections restarts, 1M mobile clients attempt to reconnect simultaneously, overwhelming auth servers.',
-        mitigation: 'Implement exponential backoff with full jitter on mobile reconnection logic (e.g. sleep rand(1, 30) seconds before reconnecting).'
+        bottleneck: 'A gateway crashes and every client reconnects at once (thundering herd)',
+        impact: 'If a gateway holding 1 million connections restarts, 1 million phones try to reconnect at the same moment. That can overload the load balancers and the authentication service.',
+        mitigation: 'Make clients wait a random time before reconnecting, and make the wait grow after each failure (exponential backoff with full jitter, for example a random 1 to 30 seconds). This spreads the reconnects over time.'
       }
     ],
     interviewQA: [
       {
         question: 'How do you prevent duplicate messages if a mobile client disconnects before receiving the server ACK?',
-        hint: 'Client retries on network reconnect.',
-        goodAnswer: 'The client assigns a client-generated UUID (idempotency key) to every message. When the client retries, the server checks if that UUID was already recorded in the deduplication cache for that conversation. If yes, it discards the duplicate write and re-sends the ACK.',
-        pitfalls: 'Relying on server-generated auto-increment IDs for deduplication.'
+        hint: 'The client will resend after it reconnects, so the server must recognize a repeat.',
+        goodAnswer: 'The client creates a unique ID (a UUID) for each message before it sends it. On a retry, the client sends the same ID. The server keeps recently seen IDs per conversation (for example in a cache with a TTL). If the ID is already there, the server skips the second write and sends the ACK again. Delivery is therefore at-least-once on the wire, but the user sees each message once.',
+        pitfalls: 'Using IDs that the server generates (such as auto-increment) for deduplication. The server cannot tell a retry from a new message, because the retry has no server ID yet.'
       }
     ],
     similarSystems: ['Signal', 'Telegram', 'WeChat', 'LINE'],
@@ -136,7 +137,7 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
     id: 'discord-slack-chat',
     title: 'Design Discord / Slack (Scalable Channels & Voice Gateways)',
     slug: 'discord-slack-architecture',
-    tagline: 'Real-time guild channels, presence broadcast rings, Elixir/Rust Gateway clusters, and distributed voice routing.',
+    tagline: 'Real-time channels for servers with hundreds of thousands of members: send messages, show who is online without flooding the network, and run voice channels.',
     category: 'Messaging & Real-time',
     difficulty: 'Advanced',
     readTime: '22 min read',
@@ -146,51 +147,51 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
       storage: '2 Trillion historical messages in ScyllaDB',
       bandwidth: '120 GB/s Real-time WebSocket Egress'
     },
-    overview: 'Discord and Slack support massive servers (guilds) with hundreds of thousands of members, structured voice and text channels, persistent message history, role-based access control, and real-time presence indicators (online/idle/dnd/mobile).',
+    overview: 'Discord and Slack group people into servers (Discord calls them guilds, Slack calls them workspaces). A server can have hundreds of thousands of members, text and voice channels, permission roles, saved message history, and live presence (online, idle, do not disturb). The hard part is fanout: one event, such as a message or a user coming online, may need to reach many connected clients.',
     keyChallenges: [
-      'Presence Broadcast Storm: In a 500k-member guild, 1 user going online triggers 500,000 WebSocket presence updates',
-      'High-Throughput Chat Persistence: Writing millions of messages/sec with deterministic channel ordering',
-      'Gateway Connection Clustering: Scaling stateful Elixir/Erlang BEAM / Rust gateways to handle 40M concurrent connections',
-      'Voice Channel Routing: WebRTC selective forwarding units (SFUs) routing real-time audio with < 30ms latency'
+      'Presence storms: in a 500,000-member server, one user going online could trigger 500,000 presence updates if every member were notified.',
+      'Storing messages at a very high write rate while keeping them in order within each channel.',
+      'Running stateful gateway clusters (Elixir on the Erlang VM, or Rust) that hold about 40 million concurrent connections.',
+      'Voice channels: WebRTC selective forwarding units (SFUs, servers that relay each speaker\'s audio to listeners) must keep audio delay low enough for natural conversation.'
     ],
     functionalRequirements: [
-      'Create guilds/workspaces, channels (text and voice), and roles',
-      'Send text, mentions (@here, @channel), and attachments in channels',
-      'Real-time user presence status (Online, Away, Do Not Disturb, Offline, Game Activity)',
-      'Infinite scroll channel message history',
-      'Real-time low-latency voice channels'
+      'Create servers (workspaces), text and voice channels, and roles.',
+      'Send text, mentions (@here, @channel) and attachments in channels.',
+      'Show real-time presence: online, away, do not disturb, offline, and game activity.',
+      'Let users scroll back through the full history of a channel.',
+      'Provide real-time voice channels.'
     ],
     nonFunctionalRequirements: [
-      'Message latency in channel < 50ms (P99)',
-      'Zero message loss with persistent historical archive',
-      'Voice audio latency < 40ms end-to-end',
-      'High availability 99.99%'
+      'Fast delivery: a new channel message should reach online members within tens of milliseconds at P99 (the slowest 1% of messages).',
+      'Durable history: once a message is acknowledged, it is stored and not lost.',
+      'Low voice delay: low enough for natural conversation (a common target is about 150 ms one way or less).',
+      'High availability (a target of 99.99%).'
     ],
-    outOfScope: ['Screen share 4K 120fps transcoding', 'Custom enterprise audit log compliance integrations'],
+    outOfScope: ['4K 120 fps screen-share transcoding', 'Enterprise audit-log and compliance integrations'],
     capacityEstimations: {
       assumptions: [
-        '200M DAU; 40M peak concurrent users connected via WebSockets',
-        '850,000 messages/sec peak across all global channels',
-        'Presence updates: 5,000,000 state transitions/sec',
-        'ScyllaDB cluster storing 2 Trillion messages (~500 TB partitioned storage)'
+        '200M daily users, with 40M connected over WebSockets at peak.',
+        '850,000 messages/s at peak across all channels worldwide.',
+        'Presence updates: 5,000,000 state changes/s.',
+        'ScyllaDB holds 2 trillion messages, about 500 TB of partitioned data.'
       ],
       metrics: [
-        { label: 'Concurrent Sockets', value: '40,000,000', formula: 'Active mobile & desktop gateway sessions', description: 'Elixir/Rust Gateway Cluster' },
-        { label: 'Message Write QPS', value: '850,000 / sec', formula: 'Peak channel message ingestion', description: 'ScyllaDB write throughput' },
-        { label: 'Presence Fanout Ops', value: '5,000,000 / sec', formula: 'User status changes distributed to active viewers', description: 'Presence Gateway Fanout' }
+        { label: 'Concurrent Sockets', value: '40,000,000', formula: 'Active mobile & desktop gateway sessions', description: 'Connections held by the Elixir/Rust gateway cluster' },
+        { label: 'Message Write QPS', value: '850,000 / sec', formula: 'Peak channel message ingestion', description: 'Write rate the ScyllaDB cluster must absorb' },
+        { label: 'Presence Fanout Ops', value: '5,000,000 / sec', formula: 'User status changes distributed to active viewers', description: 'Presence updates the gateways deliver to clients that are viewing those users' }
       ],
-      conclusion: 'Presence updates must be lazy-loaded and throttled to only visible channel lists, rather than broadcast blindly to all 500k server members.'
+      conclusion: 'Send presence only for members a client is actually showing, and batch the updates. Broadcasting every change to all 500,000 members of a server would cost far too much.'
     },
     architecture: {
-      summary: 'Clients connect via WebSocket to Rust/Elixir Gateway. Messages pass to Guild Service -> ScyllaDB for persistence -> RabbitMQ/Kafka for channel pub/sub fanout. Presence Service batches state changes and only syncs for users actively visible in the client sidebar viewport.',
+      summary: 'Clients connect to a Rust or Elixir gateway over WebSocket. The gateway passes a new message to the Guild Service, which checks permissions and writes the message to ScyllaDB. The Guild Service then publishes a channel event on a message bus (RabbitMQ or Kafka), and the gateways that hold connections for channel members push it to their clients. The Presence Service batches status changes and sends them only to clients that currently show those users in the member list.',
       nodes: [
-        { id: 'client', label: 'Discord Desktop/Mobile App', type: 'client', x: 8, y: 50, description: 'Maintains persistent gateway connection' },
-        { id: 'gateway_cluster', label: 'Discord Gateway (Elixir / Rust)', type: 'gateway', x: 30, y: 50, description: 'Manages 40M active WebSocket connections', techStack: ['Rust / Elixir BEAM'], scaleMetric: '40M Concurrent Sockets' },
-        { id: 'guild_srv', label: 'Guild & Channel Service', type: 'service', x: 55, y: 30, description: 'Validates roles, channels, and mentions', techStack: ['Python / Rust'] },
-        { id: 'presence_srv', label: 'Presence Service', type: 'service', x: 55, y: 70, description: 'Aggregates online statuses & rich activity', techStack: ['Elixir / Redis Cluster'] },
-        { id: 'msg_queue', label: 'Channel Event Bus (RabbitMQ)', type: 'queue', x: 75, y: 30, description: 'Pub/sub routing for channel events', techStack: ['RabbitMQ / Kafka'] },
-        { id: 'scylladb', label: 'Message Store (ScyllaDB)', type: 'database', x: 90, y: 30, description: 'Stores partitioned chat history', techStack: ['ScyllaDB (C++ Cassandra rewrite)'] },
-        { id: 'voice_sfu', label: 'Voice Routing Cluster (SFU)', type: 'service', x: 55, y: 90, description: 'Routes WebRTC UDP voice streams', techStack: ['Rust WebRTC SFU'] }
+        { id: 'client', label: 'Discord Desktop/Mobile App', type: 'client', x: 8, y: 50, description: 'Keeps one persistent gateway connection' },
+        { id: 'gateway_cluster', label: 'Discord Gateway (Elixir / Rust)', type: 'gateway', x: 30, y: 50, description: 'Holds the 40M WebSocket connections and pushes events to them', techStack: ['Rust / Elixir BEAM'], scaleMetric: '40M Concurrent Sockets' },
+        { id: 'guild_srv', label: 'Guild & Channel Service', type: 'service', x: 55, y: 30, description: 'Checks roles, channel permissions and mentions', techStack: ['Python / Rust'] },
+        { id: 'presence_srv', label: 'Presence Service', type: 'service', x: 55, y: 70, description: 'Tracks online status and activity, and decides who needs each update', techStack: ['Elixir / Redis Cluster'] },
+        { id: 'msg_queue', label: 'Channel Event Bus (RabbitMQ)', type: 'queue', x: 75, y: 30, description: 'Publish/subscribe routing of channel events to gateways', techStack: ['RabbitMQ / Kafka'] },
+        { id: 'scylladb', label: 'Message Store (ScyllaDB)', type: 'database', x: 90, y: 30, description: 'Stores chat history, partitioned by channel and time bucket', techStack: ['ScyllaDB (C++ Cassandra rewrite)'] },
+        { id: 'voice_sfu', label: 'Voice Routing Cluster (SFU)', type: 'service', x: 55, y: 90, description: 'Relays WebRTC voice streams over UDP', techStack: ['Rust WebRTC SFU'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'gateway_cluster', label: '1. WS Connect & Send Msg', protocol: 'WebSocket' },
@@ -202,16 +203,16 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
         { id: 'e7', from: 'client', to: 'presence_srv', label: 'Presence Heartbeat', protocol: 'WebSocket' }
       ],
       flowSteps: [
-        { step: 1, title: 'Message Dispatch & Authorization', description: 'Client sends MESSAGE_CREATE JSON payload over WebSocket. Gateway forwards to Guild Service to verify user has "SEND_MESSAGES" role in channel.', activeNodes: ['client', 'gateway_cluster', 'guild_srv'], highlightDetails: 'Permissions cached in Gateway memory for sub-millisecond validation.', latencyEstimate: '8ms' },
-        { step: 2, title: 'ScyllaDB Write with Snowflake ID', description: 'Message is assigned a 64-bit Snowflake ID and written to ScyllaDB partitioned by channel_id and bucketed by time.', activeNodes: ['guild_srv', 'scylladb'], highlightDetails: 'ScyllaDB handles 850k writes/sec with consistent sub-5ms latency.', latencyEstimate: '4ms' },
-        { step: 3, title: 'RabbitMQ Fanout to Active Gateway Pods', description: 'Guild Service publishes event to channel-specific RabbitMQ exchange. Gateway servers holding connections for active channel members receive event and push to clients.', activeNodes: ['guild_srv', 'msg_queue', 'gateway_cluster', 'client'], highlightDetails: 'End-to-end message latency under 40ms globally.', latencyEstimate: '20ms' }
+        { step: 1, title: 'Send the message and check permissions', description: 'The client sends a MESSAGE_CREATE JSON payload over its WebSocket. The gateway passes it to the Guild Service, which checks that the user has the SEND_MESSAGES permission in that channel.', activeNodes: ['client', 'gateway_cluster', 'guild_srv'], highlightDetails: 'Caching permission data close to the gateway keeps this check fast. The trade-off is that a cached role change can take a moment to apply.', latencyEstimate: '8ms' },
+        { step: 2, title: 'Assign a Snowflake ID and write to ScyllaDB', description: 'The message gets a 64-bit Snowflake ID. A Snowflake ID starts with a timestamp, so IDs sort by creation time. The message is written to ScyllaDB, partitioned by channel_id and a time bucket.', activeNodes: ['guild_srv', 'scylladb'], highlightDetails: 'The cluster as a whole absorbs the 850,000 writes/s. Each write goes to one partition, so the load spreads across many nodes.', latencyEstimate: '4ms' },
+        { step: 3, title: 'Publish the event and fan out to gateways', description: 'The Guild Service publishes the event to the channel\'s exchange on the message bus. Gateways that hold connections for members of that channel receive it and push it to those clients.', activeNodes: ['guild_srv', 'msg_queue', 'gateway_cluster', 'client'], highlightDetails: 'Only gateways with a subscribed member receive the event. The target is delivery within tens of milliseconds.', latencyEstimate: '20ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/api/v9/channels/{channel_id}/messages',
-        description: 'Send a message to a text channel',
+        description: 'Send a message to a text channel. Other members receive it through their gateway connections.',
         requestBody: '{\n  "content": "Meeting started in voice channel!",\n  "tts": false\n}',
         responseBody: '{\n  "id": "109283746501928374",\n  "channel_id": "890123456789012345",\n  "author": { "id": "1234", "username": "alex" },\n  "timestamp": "2026-08-28T10:00:00.000Z"\n}'
       }
@@ -223,39 +224,39 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
         shardingKey: 'channel_id, bucket (Partition Key), message_id (Clustering Key DESC)',
         fields: [
           { name: 'channel_id', type: 'BIGINT', isPrimary: true },
-          { name: 'bucket', type: 'INT', isPrimary: true, notes: 'Time bucket (e.g. 10 days of messages) to prevent huge partitions' },
+          { name: 'bucket', type: 'INT', isPrimary: true, notes: 'Time bucket (for example 10 days of messages), so no partition grows without limit' },
           { name: 'message_id', type: 'BIGINT', isPrimary: true, notes: 'Snowflake ID' },
           { name: 'author_id', type: 'BIGINT' },
           { name: 'content', type: 'TEXT' },
           { name: 'attachments', type: 'JSON' }
         ],
-        notes: 'ScyllaDB data model ensuring partition size stays strictly under 100MB.'
+        notes: 'One partition holds one channel for one time bucket. Messages sort newest first, so loading recent history reads one partition. Bucketing limits partition size, but a very busy channel can still produce a large bucket, so the bucket length must match the busiest channels.'
       }
     ],
     deepDives: [
       {
-        title: 'Solving the Presence Storm: Guild Member List Subscriptions',
-        subtitle: 'Why broadcasting presence to 500,000 members brings down networks',
-        content: `In a Discord server with 500,000 members (like Minecraft or Midjourney), if 100 users change status every second, naive broadcasting generates 100 * 500,000 = 50 Million WebSocket messages per second for a single server!\n\nDiscord Solution (Guild Subscriptions / Lazy Loading):\n1. The client only renders ~30-50 members in the visible right-hand sidebar viewport.\n2. When user scrolls the sidebar, client sends GUILD_SUBSCRIPTIONS { ranges: [[0, 99]] } to Gateway.\n3. The Presence Gateway only pushes presence updates for users inside the active [0, 99] index range.\n4. When a user minimizes the app or switches channels, presence subscriptions are paused immediately.\n5. Result: 99.8% reduction in presence broadcast bandwidth!`,
+        title: 'Solving the presence storm: member list subscriptions',
+        subtitle: 'Why telling 500,000 members about every status change overloads the network',
+        content: `Take a server with 500,000 members. If 100 users change status every second and each change goes to every member, the server sends 100 × 500,000 = 50 million WebSocket messages per second. That is far too much.\n\nThe fix is lazy loading (subscribe only to what is on screen):\n1. A client shows only about 30 to 50 members in the visible part of the member list.\n2. As the user scrolls, the client tells the gateway which range it is looking at, for example GUILD_SUBSCRIPTIONS { ranges: [[0, 99]] }.\n3. The gateway sends presence updates only for users inside that range.\n4. When the user minimizes the app or switches channels, the subscription pauses.\n5. Each status change now reaches only the few clients whose visible range contains that user, not all 500,000 members.\n\nThe cost is complexity: the server tracks one range per client, and the client may show slightly stale presence for members it is not looking at.`,
         keyTakeaways: [
-          'Viewport-based subscriptions eliminate broadcast amplification in massive groups.',
-          'Gateway processes presence diffs in memory rather than persisting every transient status switch to disk.'
+          'Subscribing only to what is visible removes the broadcast amplification in very large groups.',
+          'Presence is short-lived state. The gateways keep it in memory and do not write every status change to disk.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Massive ScyllaDB Partition Growth on Active Channels',
-        impact: 'A channel with 10M messages causes partition size to exceed 2GB, slowing down compaction and queries.',
-        mitigation: 'Bucket channels by time (e.g. bucket = message_id >> 22 / (1000 * 60 * 60 * 24 * 10)) so each partition holds max 50,000 messages.'
+        bottleneck: 'Partitions grow too large in busy channels',
+        impact: 'A channel with 10 million messages can reach several GB in one partition. Large partitions make compaction (background merging of data files) and reads slow.',
+        mitigation: 'Split each channel into time buckets, for example bucket = (message_id >> 22) / (1000 × 60 × 60 × 24 × 10). The Snowflake ID shifted right by 22 bits is a millisecond timestamp, so this gives 10-day buckets. A bucket limits partition size by time, not by message count, so pick the bucket length from the busiest channels\' message rates, or use shorter buckets for very active channels.'
       }
     ],
     interviewQA: [
       {
         question: 'Why did Discord migrate from MongoDB to Cassandra and then to ScyllaDB and Rust?',
-        hint: 'GC pauses in JVM and compaction bottlenecks.',
-        goodAnswer: 'MongoDB failed under high write concurrency; Cassandra (JVM) suffered from unpredictable Java Garbage Collection pauses that spiked P99 latency. ScyllaDB (written in C++ with shared-nothing seastar framework) delivered 10x lower P99 latency and eliminated GC pauses completely.',
-        pitfalls: 'Attributing the migration purely to raw storage cost rather than tail latency consistency.'
+        hint: 'Think about data that no longer fits in memory, garbage collection pauses, compaction, and hot partitions.',
+        goodAnswer: 'Discord first stored messages in MongoDB. As the data grew past what memory could hold, latency became unpredictable, so it moved to Cassandra, which scales out well. At larger scale, Cassandra ran on the JVM (Java Virtual Machine), and garbage collection pauses and compaction caused latency spikes at P99, along with problems from hot partitions (a few partitions getting most of the traffic). Discord then moved to ScyllaDB, a Cassandra-compatible database written in C++ with a shared-nothing design and no garbage collector. It also put a Rust data service in front, which merges identical concurrent reads into one query, so hot partitions are hit less often.',
+        pitfalls: 'Saying the move was only about cost, or only about raw throughput. The main reasons were tail latency and operational pain at scale.'
       }
     ],
     similarSystems: ['Slack', 'Microsoft Teams', 'Guilded', 'Mattermost'],
@@ -265,60 +266,61 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
     id: 'google-docs-collaboration',
     title: 'Design Google Docs (Real-Time Collaborative Editor)',
     slug: 'google-docs-collab',
-    tagline: 'Multiplayer document editing with concurrent conflict resolution, Operational Transformation (OT), and CRDTs.',
+    tagline: 'Let many people edit one document at the same time and make sure everyone ends up with exactly the same text, using Operational Transformation (OT) or CRDTs.',
     category: 'Messaging & Real-time',
     difficulty: 'Advanced',
     readTime: '25 min read',
     scaleSummary: {
       dau: '100 Million Daily Active Users',
       qps: '150,000 Character Edits/sec / 500,000 Active Collab Sessions',
-      storage: '50 TB / day document revision history',
-      bandwidth: '10 GB/s WebSocket Sync Egress'
+      storage: '1.3 TB / day document revision history',
+      bandwidth: '45 MB/s WebSocket Sync Egress'
     },
-    overview: 'Google Docs enables dozens of users to concurrently edit the same document with sub-50ms keystroke synchronization, cursor positions, offline reconciliation, and full historical revision playback.',
+    overview: 'A collaborative editor lets several people edit the same document at once and see each other\'s changes and cursors within a fraction of a second. Edits made offline merge in when the user reconnects, and users can browse and restore earlier versions. The core problem is that two people can edit the same spot at the same moment, and everyone must still end up with the same document.',
     keyChallenges: [
-      'Concurrent Editing Conflicts: User A inserts "X" at pos 5 while User B deletes char at pos 4 simultaneously',
-      'Choosing between Operational Transformation (OT) vs Conflict-free Replicated Data Types (CRDTs)',
-      'Sub-50ms keystroke replication latency with local optimistic UI rendering',
-      'Scalable document snapshotting and delta revision history storage'
+      'Concurrent edits conflict. For example, User A inserts "X" at position 5 while User B deletes the character at position 4 at the same time. Each edit changes what the other one means.',
+      'Choosing between Operational Transformation (OT, which rewrites each edit to fit the edits that happened before it) and Conflict-free Replicated Data Types (CRDTs, data structures built so that edits merge in any order).',
+      'Showing each keystroke instantly on the typist\'s screen (optimistic local rendering) while still getting it to other users quickly, with a target under 50 ms.',
+      'Storing the edit history and periodic snapshots so documents open fast and old versions can be restored.'
     ],
     functionalRequirements: [
-      'Real-time collaborative rich-text editing for multiple users',
-      'Real-time visual cursor positions and user selections',
-      'Undo/Redo stack that respects global collaborative edits',
-      'Offline editing with automatic synchronization upon reconnecting',
-      'Document version history with point-in-time restore'
+      'Real-time collaborative rich-text editing for several users.',
+      'Show other users\' cursors and selections live.',
+      'An undo and redo stack that handles other people\'s edits correctly.',
+      'Offline editing that syncs when the user reconnects.',
+      'Version history with restore to an earlier point in time.'
     ],
     nonFunctionalRequirements: [
-      'Zero convergence divergence: All clients MUST reach the exact same document state',
-      'Keystroke synchronization latency < 50ms',
-      'High availability 99.99%',
-      'Data durability: No typed character should ever be lost'
+      'Convergence: after all edits are delivered, every client must show exactly the same document.',
+      'Low latency: other users should see a keystroke within about 50 ms.',
+      'High availability (a target of 99.99%).',
+      'Durability: once the system accepts an edit, it must not be lost.'
     ],
-    outOfScope: ['Spreadsheet multi-cell formula recalculation DAG engine', 'Automated language translation'],
+    outOfScope: ['Spreadsheet formula recalculation (dependency-graph engine)', 'Automatic language translation'],
     capacityEstimations: {
       assumptions: [
-        '100M DAU; 10M documents actively edited daily',
-        'Average active collaborators per document: 3 users; Peak document: 100 concurrent editors',
-        'Keystrokes: 150,000 operations/sec across the globe',
-        'Operations batched every 50-100ms on the client to reduce WebSocket packet overhead'
+        '100M daily users; 10M documents are edited each day.',
+        'An active document has 3 collaborators on average. The busiest documents have about 100 editors at once.',
+        'Edits: 150,000 operations/s worldwide.',
+        'Clients batch edits every 50 to 100 ms to cut the number of WebSocket packets.',
+        'Each operation is about 100 bytes. It is stored once (13B ops/day = 1.3 TB/day before replication) and sent to all 3 collaborators (150,000 × 100 bytes × 3 = 45 MB/s).'
       ],
       metrics: [
-        { label: 'Edit Operation QPS', value: '150,000 ops/sec', formula: 'Concurrent character inserts/deletes', description: 'OT / CRDT coordination engine' },
-        { label: 'Active Collab Rooms', value: '500,000 rooms', formula: 'Simultaneously active documents', description: 'Document Session Coordinators' }
+        { label: 'Edit Operation QPS', value: '150,000 ops/sec', formula: 'Concurrent character inserts/deletes', description: 'Edits that the OT or CRDT layer must process' },
+        { label: 'Active Collab Rooms', value: '500,000 rooms', formula: 'Simultaneously active documents', description: 'Documents with a live coordinator at the same time' }
       ],
-      conclusion: 'A single-leader Document Coordinator per active document is necessary for central OT sequencing.'
+      conclusion: 'With OT, one coordinator per active document puts all edits into a single order. That is the simplest way to get everyone to the same result. A coordinator handles only one document, so the load spreads across many servers.'
     },
     architecture: {
-      summary: 'Clients communicate via WebSockets to Document Gateway -> Routed to Document Session Coordinator (Leader per document). The Coordinator applies Operational Transformation (OT), establishes global revision sequence numbers, and broadcasts transformed operations to all collaborating clients -> Periodically saves snapshots to S3 and deltas to DynamoDB.',
+      summary: 'Clients connect over WebSocket to a collaboration gateway. The gateway routes each document\'s traffic to that document\'s coordinator, a single server process that owns the document. The coordinator applies Operational Transformation (OT), gives each edit a revision number, and sends the result to all collaborators. It saves each edit to a delta log (DynamoDB or Cassandra) and writes a snapshot to S3 every so often.',
       nodes: [
-        { id: 'client_1', label: 'Collaborator 1 (User A)', type: 'client', x: 8, y: 30, description: 'Types text with optimistic local UI' },
-        { id: 'client_2', label: 'Collaborator 2 (User B)', type: 'client', x: 8, y: 70, description: 'Concurrent editor' },
-        { id: 'gateway', label: 'Collab Gateway (WS)', type: 'gateway', x: 30, y: 50, description: 'Terminates WebSockets and routes by doc_id', techStack: ['Envoy / Go'] },
-        { id: 'doc_coordinator', label: 'Document Session Coordinator', type: 'service', x: 55, y: 50, description: 'Single-leader OT sequencing engine in memory', techStack: ['Java / C++ Server'], scaleMetric: '1 Actor per active doc' },
-        { id: 'redis_coord', label: 'Doc-to-Coordinator Registry', type: 'cache', x: 55, y: 15, description: 'Consistent hashing mapping doc_id -> server_ip', techStack: ['Redis / etcd'] },
-        { id: 'delta_db', label: 'Revision Delta Store', type: 'database', x: 82, y: 35, description: 'Stores ordered append-only edit log', techStack: ['DynamoDB / Cassandra'] },
-        { id: 'snapshot_s3', label: 'Document Snapshots (S3)', type: 'storage', x: 82, y: 70, description: 'Compressed snapshot every 100 revisions', techStack: ['AWS S3'] }
+        { id: 'client_1', label: 'Collaborator 1 (User A)', type: 'client', x: 8, y: 30, description: 'Shows typed text at once, before the server confirms it' },
+        { id: 'client_2', label: 'Collaborator 2 (User B)', type: 'client', x: 8, y: 70, description: 'Edits the same document at the same time' },
+        { id: 'gateway', label: 'Collab Gateway (WS)', type: 'gateway', x: 30, y: 50, description: 'Ends WebSocket connections and routes by doc_id', techStack: ['Envoy / Go'] },
+        { id: 'doc_coordinator', label: 'Document Session Coordinator', type: 'service', x: 55, y: 50, description: 'Holds the document in memory and puts every edit into one order (OT)', techStack: ['Java / C++ Server'], scaleMetric: '1 Actor per active doc' },
+        { id: 'redis_coord', label: 'Doc-to-Coordinator Registry', type: 'cache', x: 55, y: 15, description: 'Records which server owns each doc_id, using a lease so only one server owns it at a time', techStack: ['Redis / etcd'] },
+        { id: 'delta_db', label: 'Revision Delta Store', type: 'database', x: 82, y: 35, description: 'Append-only log of every edit, in revision order', techStack: ['DynamoDB / Cassandra'] },
+        { id: 'snapshot_s3', label: 'Document Snapshots (S3)', type: 'storage', x: 82, y: 70, description: 'Compressed full copy of the document every 100 revisions', techStack: ['AWS S3'] }
       ],
       edges: [
         { id: 'e1', from: 'client_1', to: 'gateway', label: '1. Send Op(Insert "X", pos 5, rev 10)', protocol: 'WebSocket' },
@@ -330,17 +332,17 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
         { id: 'e7', from: 'doc_coordinator', to: 'snapshot_s3', label: '7. Periodic Snapshot', protocol: 'HTTPS', isAsync: true }
       ],
       flowSteps: [
-        { step: 1, title: 'Optimistic Local Execution', description: 'User A types "H". The client applies the character immediately to the local UI (0ms perceived latency) and places operation in an unacknowledged buffer.', activeNodes: ['client_1'], highlightDetails: 'Keeps typing smooth regardless of network latency.', latencyEstimate: '0ms' },
-        { step: 2, title: 'Operation Sent to Document Coordinator', description: 'Client sends Op(Insert "H", pos 5, rev 10) over WebSocket. Gateway routes to the assigned Document Coordinator server.', activeNodes: ['client_1', 'gateway', 'doc_coordinator'], highlightDetails: 'Consistent hashing ensures all editors for doc_id 42 hit the exact same server.', latencyEstimate: '20ms' },
-        { step: 3, title: 'Central Operational Transformation (OT)', description: 'Coordinator checks if other operations were committed since rev 10. If User B committed an edit at rev 11, Coordinator transforms User A op against rev 11, produces transformed op, assigns rev 12, and commits.', activeNodes: ['doc_coordinator'], highlightDetails: 'Guarantees mathematical convergence across all participants.', latencyEstimate: '1ms' },
-        { step: 4, title: 'Broadcast & Local Reconciliation', description: 'Coordinator broadcasts transformed op to all collaborators. Clients adjust their pending buffer positions and update document state.', activeNodes: ['doc_coordinator', 'gateway', 'client_2', 'client_1'], highlightDetails: 'All clients converge to the exact same text buffer.', latencyEstimate: '25ms' }
+        { step: 1, title: 'Apply the edit locally at once', description: 'User A types "H". The client shows it immediately and keeps the edit in a buffer of operations the server has not yet acknowledged.', activeNodes: ['client_1'], highlightDetails: 'The typist never waits for the network, so typing feels instant even on a slow connection.', latencyEstimate: '0ms' },
+        { step: 2, title: 'Send the edit to the document coordinator', description: 'The client sends Op(Insert "H", pos 5, rev 10) over WebSocket. The gateway looks up the document\'s coordinator and forwards the edit to it.', activeNodes: ['client_1', 'gateway', 'doc_coordinator'], highlightDetails: 'The registry names one owner per document, so all editors of doc 42 reach the same server. A lease ensures that two servers never own one document at once.', latencyEstimate: '20ms' },
+        { step: 3, title: 'Transform the edit on the server (OT)', description: 'The coordinator checks which edits were committed after rev 10. Suppose User B\'s edit became rev 11. The coordinator rewrites User A\'s edit so it still means the same thing after B\'s edit, gives it rev 12, and commits it.', activeNodes: ['doc_coordinator'], highlightDetails: 'Because the server decides one order, all clients converge, as long as the transform rules are correct. Those rules are the hard part of OT.', latencyEstimate: '1ms' },
+        { step: 4, title: 'Broadcast and reconcile on the clients', description: 'The coordinator sends the transformed edit to the other collaborators and an acknowledgment to the author. Each client applies it and adjusts any edits it has not yet had acknowledged, so its text matches the server.', activeNodes: ['doc_coordinator', 'gateway', 'client_2', 'client_1'], highlightDetails: 'Once all edits are delivered, every client holds the same text.', latencyEstimate: '25ms' }
       ]
     },
     apiDesign: [
       {
         method: 'WS',
         path: '/ws/collab/v1/{doc_id}',
-        description: 'Bidirectional collaborative OT editing channel',
+        description: 'Two-way WebSocket channel for sending and receiving OT edits on one document',
         requestBody: '{\n  "type": "OP",\n  "client_id": "c_982",\n  "base_rev": 42,\n  "ops": [{ "action": "INSERT", "pos": 15, "text": "scalable " }]\n}',
         responseBody: '{\n  "type": "ACK_OP",\n  "server_rev": 43,\n  "applied_op": { "action": "INSERT", "pos": 15, "text": "scalable " }\n}'
       }
@@ -357,33 +359,33 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
           { name: 'operation_json', type: 'TEXT' },
           { name: 'created_at', type: 'TIMESTAMP' }
         ],
-        notes: 'Append-only log of every single keystroke operation.'
+        notes: 'Append-only log with one row per committed edit (clients batch keystrokes, so a row may hold several). Rows are never changed. Replaying them in revision order rebuilds the document.'
       }
     ],
     deepDives: [
       {
         title: 'Operational Transformation (OT) vs Conflict-free Replicated Data Types (CRDTs)',
-        subtitle: 'The two foundational paradigms of collaborative computing',
-        content: `1. Operational Transformation (OT - used by Google Docs):\n- Operations (Insert/Delete at index) are transformed relative to concurrent operations: T(OpA, OpB) -> (OpA', OpB').\n- Pros: Memory efficient (plain string buffer on client, tiny JSON packets).\n- Cons: Requires a centralized server leader to establish total ordering of revisions.\n\n2. CRDTs (used by Figma, Apple Notes, Yjs, Automerge):\n- Every single character is assigned a unique fractional ID with logical timestamp (e.g. Lamport timestamp).\n- Pros: Truly decentralized (works peer-to-peer without central server; offline merges are commutative without transformation algorithms).\n- Cons: High memory overhead (each character carries metadata; 100KB text can balloon to 5MB memory).`,
+        subtitle: 'Two ways to make concurrent edits converge',
+        content: `1. Operational Transformation (OT, used by Google Docs):\n- An edit is an operation such as insert or delete at an index. When two operations happen at the same time, each is rewritten to fit the other: T(OpA, OpB) gives (OpA', OpB').\n- Pros: the client holds plain text, and operations are small JSON messages.\n- Cons: it needs a central server to put revisions in one order. The transform rules are also easy to get wrong, especially for rich text and for designs without a central server.\n\n2. CRDTs (used by libraries such as Yjs and Automerge, and in Apple Notes):\n- Each character or element gets a unique ID, and the structure is designed so that applying the same edits in any order gives the same result. Different CRDTs build these IDs in different ways (for example logical clocks and links to neighboring elements).\n- Pros: no central server is needed. Peers can merge edits directly, and offline edits merge cleanly.\n- Cons: each element carries metadata, so memory use is higher than for plain text. Modern libraries reduce this with compression, but it never goes away.\n\nFigma is often listed with CRDTs, but it uses a central server as the authority and takes only some ideas from CRDTs.`,
         keyTakeaways: [
-          'OT is ideal for client-server architectures with high performance and low memory overhead.',
-          'CRDTs are ideal for P2P, local-first, or decentralized offline-heavy applications.'
+          'OT fits client-server products with a central server, small messages and plain-text clients.',
+          'CRDTs fit peer-to-peer, local-first and offline-heavy products.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Document Loading Time for Old Documents with 50,000 Revisions',
-        impact: 'Replaying 50,000 deltas from revision 0 takes seconds to load when opening a document.',
-        mitigation: 'Snapshotting: Every 100 revisions, write a complete serialized snapshot of the document tree to S3. To open a document, load latest snapshot (e.g. rev 49,900) and only replay the last 100 deltas.'
+        bottleneck: 'Slow loading of old documents with 50,000 revisions',
+        impact: 'Replaying 50,000 edits from revision 0 can take seconds when someone opens the document.',
+        mitigation: 'Take snapshots. Every 100 revisions, write a full copy of the document to S3. To open the document, load the latest snapshot (for example at rev 49,900) and replay only the edits after it.'
       }
     ],
     interviewQA: [
       {
         question: 'How do you handle a Document Coordinator server crashing mid-session?',
-        hint: 'Actor model recovery and distributed state reconstruction.',
-        goodAnswer: 'When the coordinator node dies, etcd detects missed heartbeats and re-assigns the document to a standby node. The new node loads the latest snapshot from S3, replays committed deltas from DynamoDB, and requests connected clients to re-send any unacknowledged operations.',
-        pitfalls: 'Storing state exclusively in server memory without durable append-only delta logging.'
+        hint: 'Recover the state from storage, and let clients resend what was not acknowledged.',
+        goodAnswer: 'The registry (etcd) notices that the coordinator\'s lease has expired and assigns the document to another server. The new server loads the latest snapshot from S3 and replays the committed edits from the delta log. Clients reconnect, and each one resends any edits the server never acknowledged. For this to be safe, the coordinator must write an edit to the delta log before it acknowledges the edit. Then an acknowledged edit survives a crash, and an unacknowledged edit is still held by its client.',
+        pitfalls: 'Keeping the document only in server memory with no durable log. Another mistake is acknowledging an edit before it is stored, which can lose it.'
       }
     ],
     similarSystems: ['Figma Multiplayer', 'Notion Collab', 'Miro Canvas', 'Overleaf'],
@@ -393,59 +395,59 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
     id: 'zoom-video-conferencing',
     title: 'Design Zoom / Google Meet (Video Conferencing Platform)',
     slug: 'zoom-video-conferencing',
-    tagline: 'Global real-time audio/video routing, WebRTC media servers, Selective Forwarding Units (SFUs), and bandwidth adaptation.',
+    tagline: 'Send live audio and video between many people around the world with low delay, using WebRTC and Selective Forwarding Units (SFUs) that adapt to each viewer\'s bandwidth.',
     category: 'Messaging & Real-time',
     difficulty: 'Advanced',
     readTime: '24 min read',
     scaleSummary: {
       dau: '300 Million Meeting Participants / day',
-      qps: '50 Million Concurrent Meeting Streams',
+      qps: '20 Million Concurrent Meeting Streams',
       storage: 'Cloud Recordings in S3 (100 PB Archive)',
-      bandwidth: '50 Terabits / sec Global Real-Time UDP Egress'
+      bandwidth: '12 Terabits / sec Global Real-Time UDP Egress'
     },
-    overview: 'A real-time video conferencing system provides low-latency (< 150ms) interactive audio/video calls for 2 to 1,000 participants per room, dynamic speaker switching, screen sharing, and cloud recording.',
+    overview: 'A video conferencing service carries live audio and video for rooms of 2 to 1,000 participants. It also handles speaker switching, screen sharing and cloud recording. People notice delay quickly in a conversation, so the design aims for under about 150 ms of one-way audio delay.',
     keyChallenges: [
-      'Global End-to-End Latency < 150ms: Audio delays above 200ms make human conversation clunky',
-      'Media Routing Architecture: Peer-to-Peer vs Multipoint Control Unit (MCU) vs Selective Forwarding Unit (SFU)',
-      'Packet Loss & Jitter: Handling 5-20% cellular packet loss using Forward Error Correction (FEC) and NACK retransmissions',
-      'Simulcast & SVC (Scalable Video Coding): Sending multiple video resolutions simultaneously to accommodate varying client bandwidths'
+      'Keep delay low. When one-way audio delay passes roughly 150 to 200 ms, people start talking over each other.',
+      'Choose how media flows: peer-to-peer mesh, a Multipoint Control Unit (MCU, which mixes everyone into one video), or a Selective Forwarding Unit (SFU, which forwards streams without mixing them).',
+      'Cope with packet loss and jitter (uneven packet arrival times), which are common on cellular and Wi-Fi. The tools are Forward Error Correction (FEC, extra data that lets the receiver rebuild lost packets) and NACK (the receiver asks the sender to resend a lost packet).',
+      'Send each video in several qualities at once (simulcast) or in layers (Scalable Video Coding, SVC), so each viewer gets a stream that fits their bandwidth.'
     ],
     functionalRequirements: [
-      'Create and join video meeting rooms with short meeting ID or link',
-      'Real-time audio, HD video, and screen sharing for up to 500 participants',
-      'Active Speaker Detection (highlight current speaker automatically)',
-      'In-meeting text chat and reactions',
-      'Cloud meeting recording with MP4 output'
+      'Create and join a room with a short meeting ID or a link.',
+      'Real-time audio, HD video and screen sharing for rooms of up to 1,000 participants. Only a few videos are shown at full size at once.',
+      'Detect the active speaker and highlight them.',
+      'In-meeting text chat and reactions.',
+      'Cloud recording that produces an MP4 file.'
     ],
     nonFunctionalRequirements: [
-      'Ultra Low Latency: Mouth-to-Ear delay < 150ms globally',
-      'Smooth audio under 10% packet loss (audio prioritization over video)',
-      'High Scalability: Spin up SFU media routing nodes dynamically across 50+ global cloud regions',
-      'End-to-End Encryption support for private rooms'
+      'Low delay: a one-way mouth-to-ear delay of about 150 ms or less.',
+      'Clear audio under heavy packet loss (about 10%), by protecting audio before video.',
+      'Scalable: start and stop SFU servers as needed across many cloud regions.',
+      'Optional end-to-end encryption for private rooms. This mode limits server features such as cloud recording.'
     ],
-    outOfScope: ['PSTN telephone dial-in telephony hardware PBX integration'],
+    outOfScope: ['Phone dial-in (PSTN) and PBX hardware integration'],
     capacityEstimations: {
       assumptions: [
-        '300M daily meeting participants; Peak concurrent: 20 Million active video participants',
-        'Average video stream: 720p @ 1.2 Mbps; Audio: Opus @ 40 kbps',
-        'SFU Bandwidth: A 50-person room with 1 speaker and 49 viewers requires 1 incoming stream forwarded to 49 clients = 50 Mbps egress per room'
+        '300M daily meeting participants. At peak, 20 million streams are active at the same time.',
+        'Average video stream: 720p at 1.2 Mbps. Audio: Opus codec at 40 kbps.',
+        'SFU bandwidth: in a 50-person room with 1 speaker and 49 viewers, the SFU receives 1 stream and sends a copy to 49 clients. That is about 59 Mbps of egress for the room (49 × 1.2 Mbps).'
       ],
       metrics: [
-        { label: 'Global Media Egress', value: '50 Tbps', formula: '20M streams * average 600 kbps (Simulcast adjusted)', description: 'Total UDP Media Relay Throughput' },
-        { label: 'SFU Server Fleet', value: '2,500 Nodes', formula: '50 Tbps / 20 Gbps per dedicated bare-metal media server', description: 'Global Media Edge Infrastructure' }
+        { label: 'Global Media Egress', value: '12 Tbps', formula: '20M streams * average 600 kbps (Simulcast adjusted)', description: 'Total media traffic sent by SFUs. The 600 kbps average is below 1.2 Mbps because many viewers receive a lower-quality layer.' },
+        { label: 'SFU Server Fleet', value: '600 Nodes', formula: '12 Tbps / 20 Gbps per dedicated bare-metal media server', description: 'Media servers needed around the world, with room to add more for peaks' }
       ],
-      conclusion: 'Media routing must use UDP / RTP rather than TCP/HTTP to prevent Head-of-Line blocking.'
+      conclusion: 'Send media over UDP with RTP (the real-time media packet format), not over TCP or HTTP. TCP resends lost packets and holds back everything behind them (head-of-line blocking), which adds delay that live media cannot afford.'
     },
     architecture: {
-      summary: 'Clients initiate call via HTTPS/WebSocket Signaling Server -> Negotiate ICE/SDP candidates -> Stream encrypted audio/video via WebSockets/UDP (SRTP) to nearest Selective Forwarding Unit (SFU) Media Server -> SFU forwards selected video bitrates (Simulcast) to room participants.',
+      summary: 'A client contacts the signaling server over HTTPS and WebSocket to join a meeting. The two sides exchange connection details (SDP and ICE candidates), and the client then sends its audio and video as SRTP (encrypted RTP) over UDP to a nearby SFU. The SFU forwards the right quality level of each stream to every other participant. The SFU does not mix streams. With normal SRTP, the SFU decrypts each packet on arrival and encrypts it again for each receiver. True end-to-end encryption needs the clients to encrypt the media themselves.',
       nodes: [
         { id: 'client_speaker', label: 'Active Speaker Client', type: 'client', x: 8, y: 30, description: 'Publishes 3 video simulcast layers (720p, 360p, 180p)' },
-        { id: 'client_viewer', label: 'Meeting Viewers', type: 'client', x: 8, y: 70, description: 'Subscribes to audio and active video feeds' },
-        { id: 'signaling_srv', label: 'Signaling Service (WebSocket)', type: 'service', x: 30, y: 50, description: 'Handles SDP offer/answer & ICE candidate exchange', techStack: ['Node.js / Go'] },
-        { id: 'sfu_cluster', label: 'Media Routing Cluster (SFU)', type: 'service', x: 55, y: 50, description: 'Forwards UDP/SRTP packets without decoding', techStack: ['C++ mediasoup / Pion WebRTC'], scaleMetric: '20 Gbps / server' },
-        { id: 'meeting_db', label: 'Meeting Coordinator DB', type: 'database', x: 55, y: 15, description: 'Room state, participant roster, auth', techStack: ['Redis / DynamoDB'] },
-        { id: 'recorder', label: 'Cloud Recording Worker', type: 'worker', x: 80, y: 50, description: 'Composites audio/video streams into MP4 file', techStack: ['FFmpeg + GStreamer'] },
-        { id: 's3_records', label: 'Recording Storage (S3)', type: 'storage', x: 95, y: 50, description: 'Stores recorded meetings', techStack: ['AWS S3 Standard'] }
+        { id: 'client_viewer', label: 'Meeting Viewers', type: 'client', x: 8, y: 70, description: 'Receives audio and the video streams it chooses to watch' },
+        { id: 'signaling_srv', label: 'Signaling Service (WebSocket)', type: 'service', x: 30, y: 50, description: 'Carries the SDP offer/answer and ICE candidates between client and server', techStack: ['Node.js / Go'] },
+        { id: 'sfu_cluster', label: 'Media Routing Cluster (SFU)', type: 'service', x: 55, y: 50, description: 'Forwards media packets without decoding or re-encoding the video', techStack: ['C++ mediasoup / Pion WebRTC'], scaleMetric: '20 Gbps / server' },
+        { id: 'meeting_db', label: 'Meeting Coordinator DB', type: 'database', x: 55, y: 15, description: 'Stores room state, participant list and access control', techStack: ['Redis / DynamoDB'] },
+        { id: 'recorder', label: 'Cloud Recording Worker', type: 'worker', x: 80, y: 50, description: 'Decodes the streams and combines them into one MP4 file', techStack: ['FFmpeg + GStreamer'] },
+        { id: 's3_records', label: 'Recording Storage (S3)', type: 'storage', x: 95, y: 50, description: 'Stores finished recordings', techStack: ['AWS S3 Standard'] }
       ],
       edges: [
         { id: 'e1', from: 'client_speaker', to: 'signaling_srv', label: '1. SDP Offer & Join', protocol: 'WebSocket' },
@@ -456,17 +458,17 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
         { id: 'e6', from: 'recorder', to: 's3_records', label: '6. Upload Final MP4', protocol: 'HTTPS', isAsync: true }
       ],
       flowSteps: [
-        { step: 1, title: 'WebRTC Signaling & SDP Handshake', description: 'Clients connect to Signaling Server over WebSocket, exchanging Session Description Protocol (SDP) parameters and ICE candidates (NAT traversal via STUN/TURN).', activeNodes: ['client_speaker', 'signaling_srv', 'meeting_db'], highlightDetails: 'Selects the topologically nearest regional SFU media server.', latencyEstimate: '40ms' },
-        { step: 2, title: 'Simulcast UDP Media Ingestion', description: 'Speaker publishes audio via Opus codec and video in 3 simulcast streams (High: 720p@1.5Mbps, Med: 360p@500kbps, Low: 180p@150kbps) over SRTP (Secure UDP).', activeNodes: ['client_speaker', 'sfu_cluster'], highlightDetails: 'UDP avoids TCP retransmission latency delays.', latencyEstimate: '20ms' },
-        { step: 3, title: 'Selective Forwarding Unit (SFU) Routing', description: 'SFU does NOT transcode or decode video (zero CPU load). It inspects packet headers and forwards High quality to the participant with active screen focus, and Low quality thumbnail streams to gallery view participants.', activeNodes: ['sfu_cluster', 'client_viewer'], highlightDetails: 'SFU can serve 1,000 participants on a single 16-core server.', latencyEstimate: '5ms' },
-        { step: 4, title: 'Packet Loss Concealment & Audio Prioritization', description: 'If a client experiences network packet loss, SFU drops video frames first to keep Opus audio crystal clear and jitter-free.', activeNodes: ['sfu_cluster', 'client_viewer'], highlightDetails: 'FEC (Forward Error Correction) recovers lost audio packets without waiting for retransmission.', latencyEstimate: '10ms' }
+        { step: 1, title: 'Signaling and the SDP handshake', description: 'The client connects to the signaling server over WebSocket. The two sides exchange Session Description Protocol (SDP) messages, which list codecs and settings, and ICE candidates, which are possible network paths. STUN helps a client learn its public address, and TURN relays media when a direct path is blocked.', activeNodes: ['client_speaker', 'signaling_srv', 'meeting_db'], highlightDetails: 'The service picks an SFU close to the client, usually by network distance, to keep delay low.', latencyEstimate: '40ms' },
+        { step: 2, title: 'Publish audio and simulcast video over UDP', description: 'The speaker sends audio with the Opus codec and video in 3 simulcast layers: high (720p, about 1.2 Mbps), medium (360p, about 500 kbps) and low (180p, about 150 kbps). All are sent as SRTP (encrypted RTP) over UDP.', activeNodes: ['client_speaker', 'sfu_cluster'], highlightDetails: 'UDP does not resend late packets, so a lost packet does not stall the packets behind it.', latencyEstimate: '20ms' },
+        { step: 3, title: 'The SFU routes streams', description: 'The SFU does not decode or re-encode the video, so it uses little CPU. It reads packet headers and forwards the high layer to viewers who show the speaker large, and the low layer to viewers who show small gallery tiles.', activeNodes: ['sfu_cluster', 'client_viewer'], highlightDetails: 'A server can handle many rooms because forwarding is cheap. The limit is network bandwidth (about 20 Gbps per server in these estimates), not CPU.', latencyEstimate: '5ms' },
+        { step: 4, title: 'Protect audio when the network gets bad', description: 'When a viewer has packet loss or low bandwidth, the SFU sends that viewer a lower video layer, or pauses video, so the audio keeps flowing.', activeNodes: ['sfu_cluster', 'client_viewer'], highlightDetails: 'Opus in-band FEC lets the receiver rebuild a lost audio packet from the next one, without waiting for a resend.', latencyEstimate: '10ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/api/v1/meetings/create',
-        description: 'Create a new meeting room',
+        description: 'Create a meeting room and return the join link and the signaling server address',
         requestBody: '{\n  "topic": "Architecture Review",\n  "e2ee": true\n}',
         responseBody: '{\n  "meeting_id": "892-482-1092",\n  "join_url": "https://meet.example.com/892-482-1092",\n  "signaling_endpoint": "wss://signal-us-west.meet.example.com/ws"\n}'
       }
@@ -483,33 +485,33 @@ export const MESSAGING_CASE_STUDIES: CaseStudy[] = [
           { name: 'participants_count', type: 'INT' },
           { name: 'created_at', type: 'TIMESTAMP' }
         ],
-        notes: 'Redis cluster tracking active meeting state with 10-second heartbeat expiration.'
+        notes: 'Redis cluster holding the state of live meetings. Each entry expires after 10 seconds unless the SFU renews it with a heartbeat, so ended or crashed meetings disappear on their own.'
       }
     ],
     deepDives: [
       {
-        title: 'Media Architectures: Mesh vs MCU vs SFU',
-        subtitle: 'Why SFU is the undisputed standard for modern video calling',
-        content: `1. Peer-to-Peer Mesh:\n- Every client sends audio/video to every other client.\n- Bandwidth for N participants: N-1 uploads per client (O(N^2) network traffic).\n- Max scale: 4-6 people before home uplink saturates.\n\n2. MCU (Multipoint Control Unit):\n- All clients send 1 stream to central server.\n- Server decodes all video, composites them into a single "Brady Bunch" grid video, re-encodes, and sends 1 stream to each client.\n- Pros: Tiny client download bandwidth.\n- Cons: Massive server CPU and GPU cost; adds 100-250ms transcoding latency!\n\n3. SFU (Selective Forwarding Unit - Zoom / Meet Architecture):\n- Clients send Simulcast streams to SFU.\n- SFU acts as an intelligent UDP packet router, forwarding raw packets to participants without decoding.\n- Scales to 1,000+ participants with sub-10ms server processing latency!`,
+        title: 'Media architectures: mesh vs MCU vs SFU',
+        subtitle: 'Why most modern video calling uses an SFU',
+        content: `1. Peer-to-peer mesh:\n- Every client sends its audio and video directly to every other client.\n- Each client uploads N-1 streams, so total traffic grows as O(N^2).\n- It works only for small calls. A home internet uplink runs out of bandwidth with a handful of people.\n\n2. MCU (Multipoint Control Unit):\n- Each client sends one stream to a central server.\n- The server decodes every video, combines them into one grid picture, re-encodes it and sends one stream to each client.\n- Pros: each client needs little download bandwidth and little processing.\n- Cons: decoding and encoding every call needs a lot of server CPU and GPU, which costs money. It also adds delay, and the layout is fixed by the server.\n\n3. SFU (Selective Forwarding Unit, the approach behind most WebRTC services such as Meet):\n- Each client sends its stream, in several simulcast qualities, to the SFU.\n- The SFU forwards packets to the right participants without decoding them.\n- Server cost is low because the SFU only copies packets. The price is higher download bandwidth for each client, because it receives one stream per visible participant.`,
         keyTakeaways: [
-          'SFUs provide the ideal balance of server efficiency and client video quality adaptability.',
-          'Simulcast allows sending high/low bitrates simultaneously to match viewer screen sizes.'
+          'An SFU balances server cost against video quality that adapts to each viewer.',
+          'Simulcast sends several qualities at once, so the SFU can match each viewer\'s screen size and bandwidth.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Cellular Jitter & Random Packet Drops',
-        impact: 'Audio clips and robotic voice artifacts occur when UDP packets arrive out of order.',
-        mitigation: 'Implement Adaptive Jitter Buffer (holds 20-50ms of audio packets to re-order) + Opus Codec In-Band FEC (Forward Error Correction).'
+        bottleneck: 'Jitter and dropped packets on cellular networks',
+        impact: 'Packets arrive late or out of order, so audio cuts out or sounds robotic.',
+        mitigation: 'Use an adaptive jitter buffer, which holds audio for a short time (often 20 to 50 ms, adjusted to the network) so packets can be put back in order. Add Opus in-band FEC to rebuild lost packets without a resend.'
       }
     ],
     interviewQA: [
       {
         question: 'Why is TCP not used for real-time video conferencing media packets?',
-        hint: 'Head-of-line blocking in TCP.',
-        goodAnswer: 'TCP guarantees delivery by retransmitting lost packets. In real-time video, an audio packet from 400ms ago is completely useless. Waiting for TCP retransmission stalls the entire buffer (Head-of-Line blocking), destroying real-time conversation. UDP allows dropping late packets and continuing immediately.',
-        pitfalls: 'Suggesting HTTP/2 or WebSockets for raw video stream transport.'
+        hint: 'Think about head-of-line blocking.',
+        goodAnswer: 'TCP delivers every byte in order, so after a loss it resends the missing packet and holds back everything behind it (head-of-line blocking). In a live call, a packet that is 400 ms late is useless, and waiting for it delays all later audio and video. UDP lets the receiver skip a late packet and play the next one, and the codec hides the gap. WebRTC adds its own congestion control and loss recovery on top of UDP. Some networks block UDP, so WebRTC can fall back to TCP or TLS through a TURN relay, at the cost of higher delay.',
+        pitfalls: 'Suggesting WebSockets or HTTP/2 as the main transport for live media. Both run on TCP and have the same head-of-line blocking problem.'
       }
     ],
     similarSystems: ['Google Meet', 'Microsoft Teams', 'FaceTime', 'Cisco Webex'],

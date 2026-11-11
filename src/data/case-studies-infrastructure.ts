@@ -5,63 +5,64 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'google-web-crawler',
     title: 'Design Google Web Crawler & Distributed Search Indexer',
     slug: 'google-web-crawler',
-    tagline: 'Petabyte-scale distributed web crawler, URL frontier politeness, PageRank, and inverted index construction.',
+    tagline: 'Crawl billions of web pages politely, avoid duplicates, and build the index that powers search.',
     category: 'Search & Big Data',
     difficulty: 'Advanced',
     readTime: '26 min read',
     scaleSummary: {
       dau: '5 Billion Daily Searches / 50 Billion Web Pages Indexed',
       qps: '150,000 Search QPS / 50,000 Pages Crawled/sec',
-      storage: '250 Petabytes raw HTML and inverted index data',
-      bandwidth: '50 GB/s Continuous Ingress'
+      storage: '30 Petabytes HTML and inverted index data',
+      bandwidth: '25 GB/s (200 Gbps) Continuous Ingress'
     },
-    overview: 'A distributed web crawler discovers, fetches, and parses billions of web pages from the public internet. It extracts outbound links, feeds them into a prioritized and polite URL Frontier, deduplicates content, and builds an inverted index for Google Search queries.',
+    overview: 'A web crawler finds, downloads and reads web pages. It pulls the links out of each page and adds them to a queue of pages to visit (the URL Frontier). It skips pages it has already seen, then builds an inverted index (a map from each word to the pages that contain it) so search queries can be answered quickly.',
     keyChallenges: [
-      'Politeness & Rate Limiting: Not crashing external web servers by respecting robots.txt and throttling crawls per domain',
-      'URL Frontier Priority & Refresh Cycles: Ensuring high-authority pages (Wikipedia, NYTimes) are recrawled hourly while dead blogs are crawled monthly',
-      'Content & URL Deduplication: Detecting duplicate content using SimHash / MinHash across 50 Billion pages',
-      'Spider Traps & Infinite Loops: Handling infinite calendar generation pages (e.g. /calendar?year=2026&month=9)'
+      'Politeness: do not overload other websites. Obey robots.txt (a site\'s crawling rules) and limit how often each domain is fetched.',
+      'Freshness: recrawl important, fast-changing pages (a news homepage) often and rarely changing pages (a dormant blog) much less often.',
+      'Duplicates: detect pages with the same or nearly the same content among 50 billion pages, using fingerprints such as SimHash.',
+      'Spider traps: avoid pages that generate endless links, such as a calendar page (/calendar?year=2026&month=9) that always links to the next month.'
     ],
     functionalRequirements: [
-      'Given seed URLs, crawl the web breadth-first and extract hyperlinks',
-      'Parse HTML, extract text, and compute inverted indexes',
-      'Respect robots.txt politeness protocols and crawling delays',
-      'Deduplicate URLs and duplicate content',
-      'Serve full-text search queries ranked by BM25 + PageRank'
+      'Start from seed URLs, fetch pages, and follow the links they contain.',
+      'Parse the HTML, extract the text, and build an inverted index.',
+      'Obey robots.txt rules and crawl delays.',
+      'Remove duplicate URLs and duplicate content.',
+      'Answer full-text search queries, ranked by BM25 (a text-match score) and PageRank (a link-based importance score).'
     ],
     nonFunctionalRequirements: [
-      'High Throughput: Crawl 1 Billion web pages per week (~2,000 pages/sec continuous)',
-      'Fault Tolerance: Crawler worker crashes must not lose frontier queue state',
-      'Scalability: Easily add new crawler worker nodes to scale ingestion',
-      'Search query response time < 200ms at P99'
+      'Throughput: crawl about 50,000 pages per second, which is about 4 billion pages per day. At that rate the whole 50-billion-page index can be refreshed in under two weeks.',
+      'Fault tolerance: if a crawler worker crashes, the frontier state must not be lost.',
+      'Scalability: adding crawler workers should increase crawl speed.',
+      'Search latency: under 200 ms at P99 (99% of queries are faster).'
     ],
-    outOfScope: ['Deep web password-protected site crawling', 'Dark web onion network routing'],
+    outOfScope: ['Crawling pages behind a login (the deep web).', 'Dark web (onion network) crawling.'],
     capacityEstimations: {
       assumptions: [
-        '50 Billion web pages in global index',
-        'Average page HTML size: 500 KB compressed -> 50B * 500 KB = 25 Petabytes raw storage',
-        'Crawl rate: 50,000 pages/sec continuous (25 Gbps sustained bandwidth)',
-        'Inverted Index: ~5 PB compressed text index across Bigtable / SSDs'
+        'The index holds 50 billion web pages.',
+        'An average page is 500 KB compressed, so 50B × 500 KB = 25 PB of page storage.',
+        'The crawl rate is 50,000 pages/s sustained: 50,000 × 500 KB = 25 GB/s (200 Gbps).',
+        'The inverted index takes about 5 PB compressed, stored in Bigtable or on SSDs.',
+        'Total: 25 PB of pages + 5 PB of index = 30 PB for one copy, or 90 PB with 3 replicas.'
       ],
       metrics: [
-        { label: 'Crawl Ingress Bandwidth', value: '25 Gbps', formula: '50,000 pages/sec * 500 KB average size', description: 'Network crawler throughput' },
-        { label: 'Indexed Web Pages', value: '50 Billion', formula: 'Global searchable page corpus', description: 'Bigtable storage' },
-        { label: 'URL Frontier Queue Size', value: '100 Billion URLs', formula: 'Buffered unvisited hyperlinks', description: 'Distributed disk queues' }
+        { label: 'Crawl Ingress Bandwidth', value: '200 Gbps', formula: '50,000 pages/sec * 500 KB average size', description: 'Network bandwidth the crawler needs' },
+        { label: 'Indexed Web Pages', value: '50 Billion', formula: 'Global searchable page corpus', description: 'Pages stored and indexed in Bigtable' },
+        { label: 'URL Frontier Queue Size', value: '100 Billion URLs', formula: 'Buffered unvisited hyperlinks', description: 'Unvisited links held in disk-backed queues' }
       ],
-      conclusion: 'A two-tier URL Frontier (Priority Queues + Politeness Queues per host) is required to prevent DDoS on external websites.'
+      conclusion: 'The URL Frontier needs two layers: priority queues (what to crawl next) and one politeness queue per host (when each host may be fetched again). Without the second layer, the crawler could flood a single website.'
     },
     architecture: {
-      summary: 'Seed URLs -> URL Frontier (Priority & Politeness Queues) -> Distributed Fetcher Workers -> DNS Resolver Cache -> HTML Content Parser -> Content Deduplicator (SimHash) -> Link Extractor -> URL Filter & Deduplicator -> Primary Bigtable / Inverted Indexer.',
+      summary: 'Seed URLs go into the URL Frontier (priority and politeness queues). Fetcher workers pop URLs, look up the host IP in a DNS cache, and download the pages. The parser extracts text and links. A SimHash check removes duplicate content. New links go back to the frontier. Pages are stored in Bigtable, and a batch job builds the inverted index for the query engine.',
       nodes: [
-        { id: 'seeds', label: 'Seed URLs & Sitemaps', type: 'service', x: 8, y: 30, description: 'Bootstrap URLs for crawling' },
-        { id: 'frontier', label: 'URL Frontier', type: 'queue', x: 28, y: 30, description: 'Prioritizes and enforces politeness delays per domain', techStack: ['Kafka + RocksDB'] },
-        { id: 'fetchers', label: 'Distributed Fetcher Workers', type: 'worker', x: 50, y: 30, description: 'Asynchronously downloads web pages', techStack: ['Go / C++ Async HTTP'] },
-        { id: 'dns_cache', label: 'Dedicated DNS Cache Cluster', type: 'cache', x: 50, y: 10, description: 'Caches 50M domain IP lookups in RAM', techStack: ['Redis / BIND'] },
-        { id: 'parser', label: 'HTML Parser & Text Extractor', type: 'service', x: 72, y: 30, description: 'Extracts text, metadata, and <a> href links', techStack: ['libxml2 / Rust'] },
-        { id: 'dedup', label: 'Content Dedup (SimHash)', type: 'search', x: 92, y: 30, description: 'Detects duplicate pages using 64-bit fingerprints', techStack: ['SimHash Index'] },
-        { id: 'doc_store', label: 'Raw Page Store (Bigtable)', type: 'storage', x: 92, y: 70, description: 'Stores raw HTML & parsed text', techStack: ['Google Cloud Bigtable / GCS'] },
-        { id: 'indexer', label: 'Inverted Index Builder (MapReduce)', type: 'worker', x: 68, y: 70, description: 'Constructs Term -> DocIDs posting lists', techStack: ['MapReduce / Apache Spark'] },
-        { id: 'search_engine', label: 'Search Query Engine', type: 'service', x: 35, y: 70, description: 'Evaluates user queries with PageRank', techStack: ['C++ Query Server'] }
+        { id: 'seeds', label: 'Seed URLs & Sitemaps', type: 'service', x: 8, y: 30, description: 'Starting URLs and sitemaps' },
+        { id: 'frontier', label: 'URL Frontier', type: 'queue', x: 28, y: 30, description: 'Decides which URL is crawled next and enforces a delay per domain', techStack: ['Kafka + RocksDB'] },
+        { id: 'fetchers', label: 'Distributed Fetcher Workers', type: 'worker', x: 50, y: 30, description: 'Download web pages without blocking while they wait on the network', techStack: ['Go / C++ Async HTTP'] },
+        { id: 'dns_cache', label: 'Dedicated DNS Cache Cluster', type: 'cache', x: 50, y: 10, description: 'Keeps domain-to-IP lookups in memory so fetchers skip slow DNS calls', techStack: ['Redis / BIND'] },
+        { id: 'parser', label: 'HTML Parser & Text Extractor', type: 'service', x: 72, y: 30, description: 'Extracts text, metadata and links (<a href>) from the HTML', techStack: ['libxml2 / Rust'] },
+        { id: 'dedup', label: 'Content Dedup (SimHash)', type: 'search', x: 92, y: 30, description: 'Finds duplicate pages by comparing 64-bit SimHash fingerprints', techStack: ['SimHash Index'] },
+        { id: 'doc_store', label: 'Raw Page Store (Bigtable)', type: 'storage', x: 92, y: 70, description: 'Stores raw HTML and parsed text', techStack: ['Google Cloud Bigtable / GCS'] },
+        { id: 'indexer', label: 'Inverted Index Builder (MapReduce)', type: 'worker', x: 68, y: 70, description: 'Builds posting lists (word to list of page IDs)', techStack: ['MapReduce / Apache Spark'] },
+        { id: 'search_engine', label: 'Search Query Engine', type: 'service', x: 35, y: 70, description: 'Answers user queries and ranks results with PageRank', techStack: ['C++ Query Server'] }
       ],
       edges: [
         { id: 'e1', from: 'seeds', to: 'frontier', label: 'Initialize Seeds', protocol: 'Internal RPC' },
@@ -75,17 +76,17 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         { id: 'e9', from: 'indexer', to: 'search_engine', label: '8. Load Inverted Index', protocol: 'Internal RPC' }
       ],
       flowSteps: [
-        { step: 1, title: 'URL Frontier Politeness Scheduling', description: 'Frontier pops a URL for "nytimes.com". Politeness queue ensures at least 500ms has elapsed since the last fetch from nytimes.com, preventing server overload.', activeNodes: ['frontier', 'fetchers'], highlightDetails: 'Separates Priority (PageRank score) from Politeness (one queue per hostname).', latencyEstimate: '5ms' },
-        { step: 2, title: 'High-Speed Async Page Fetching', description: 'Fetcher worker checks local DNS cache (avoiding 50ms DNS lookup) and downloads HTML payload asynchronously over HTTP/2 with a 5-second timeout.', activeNodes: ['fetchers', 'dns_cache'], highlightDetails: 'Handles 50,000 parallel connections per worker server.', latencyEstimate: '120ms' },
-        { step: 3, title: 'SimHash Deduplication & Link Extraction', description: 'Parser extracts body text, computes 64-bit SimHash fingerprint, and checks if identical content exists in DB (if Hamming distance <= 3, discard as duplicate). Extracted links are pushed back to URL Frontier.', activeNodes: ['parser', 'dedup', 'frontier', 'doc_store'], highlightDetails: 'Filters out 40% of internet pages as exact or near-duplicate mirrors.', latencyEstimate: '20ms' },
-        { step: 4, title: 'Distributed Inverted Index Construction', description: 'MapReduce batch pipeline aggregates all parsed pages into compressed Posting Lists (Word -> [DocID1, DocID2]) sorted by PageRank + BM25 score.', activeNodes: ['doc_store', 'indexer', 'search_engine'], highlightDetails: 'Enables sub-50ms search query lookups across 50 Billion documents.', latencyEstimate: '10 mins (Batch)' }
+        { step: 1, title: 'URL Frontier politeness scheduling', description: 'The frontier picks a URL for nytimes.com. The politeness queue checks that at least 500 ms have passed since the last fetch from that host, so the crawler does not overload the site.', activeNodes: ['frontier', 'fetchers'], highlightDetails: 'Priority (importance score) and politeness (one queue per host) are handled separately.', latencyEstimate: '5ms' },
+        { step: 2, title: 'Asynchronous page fetching', description: 'The fetcher looks up the host IP in the local DNS cache, which avoids a DNS lookup of about 50 ms. It then downloads the page over HTTP with a 5-second timeout.', activeNodes: ['fetchers', 'dns_cache'], highlightDetails: 'Non-blocking I/O lets one worker keep thousands of downloads in flight at once.', latencyEstimate: '120ms' },
+        { step: 3, title: 'Duplicate detection and link extraction', description: 'The parser extracts the body text and computes a 64-bit SimHash fingerprint. If a stored fingerprint differs by 3 bits or fewer (Hamming distance <= 3), the page is a near-duplicate and is dropped. The links it found go back to the URL Frontier.', activeNodes: ['parser', 'dedup', 'frontier', 'doc_store'], highlightDetails: 'The crawler does not store or index near-duplicate copies of the same content.', latencyEstimate: '20ms' },
+        { step: 4, title: 'Building the inverted index', description: 'A MapReduce batch job reads all parsed pages and builds compressed posting lists (word to [DocID1, DocID2, ...]). Pages are ordered by a score that combines PageRank and BM25.', activeNodes: ['doc_store', 'indexer', 'search_engine'], highlightDetails: 'The query engine can look up a word in the index without scanning the 50 billion documents.', latencyEstimate: '10 mins (Batch)' }
       ]
     },
     apiDesign: [
       {
         method: 'GET',
         path: '/search?q=distributed+systems&page=1',
-        description: 'Execute full-text search across indexed web pages',
+        description: 'Run a full-text search over the indexed pages',
         responseBody: '{\n  "total_hits": 48200000,\n  "took_ms": 18,\n  "results": [\n    {\n      "title": "Distributed Computing - Wikipedia",\n      "url": "https://en.wikipedia.org/wiki/Distributed_computing",\n      "snippet": "Distributed computing is a field of computer science...",\n      "pagerank": 0.94\n    }\n  ]\n}'
       }
     ],
@@ -102,33 +103,33 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
           { name: 'last_crawled_at', type: 'TIMESTAMP' },
           { name: 'pagerank_score', type: 'FLOAT' }
         ],
-        notes: 'Google Cloud Bigtable storing petabytes of parsed web pages with row-key compression.'
+        notes: 'Stored in Google Cloud Bigtable. Rows are keyed by reversed domain, so pages from one site sit next to each other and compress well.'
       }
     ],
     deepDives: [
       {
-        title: 'The URL Frontier: Priority Queues + Politeness Queues Architecture',
-        subtitle: 'The two-tiered queue design that makes web crawling polite and efficient',
-        content: `A naive FIFO queue crawls millions of links from the first domain it finds (e.g. Wikipedia), resulting in a Denial of Service (DDoS) attack on Wikipedia while starving all other websites.\n\nMercator URL Frontier Two-Tier Design:\n1. Front Queues (Priority / Freshness):\n   - URLs enter F1 to FN priority queues based on PageRank and update frequency.\n   - High PageRank URLs (homepage of CNN) are placed in Top Priority queue.\n2. Back Queues (Politeness / Hostname):\n   - Each distinct hostname (e.g. nytimes.com, github.com) has its own dedicated FIFO Back Queue B1 to BK.\n   - A Host-to-Queue table maps hostnames to active back queues.\n   - A Min-Heap of (QueueID, NextAvailableTime) schedules when each host can be queried next.\n   - When a fetcher is idle, it pops the queue with the earliest NextAvailableTime, fetches 1 page, and pushes NextAvailableTime = Now + Delay (e.g. 500ms) back into the heap.\n\nResult: Strictly 1 request per host at a time, while 10,000 distinct hosts are crawled in parallel!`,
+        title: 'The URL Frontier: priority queues plus politeness queues',
+        subtitle: 'The two-layer queue that keeps a crawler polite and efficient',
+        content: `A simple first-in-first-out queue would crawl millions of links from the first big site it finds (for example Wikipedia). That would overload that site and starve every other site.\n\nThe Mercator crawler solves this with two layers of queues:\n1. Front queues (what to crawl next):\n   - URLs enter one of several priority queues (F1 to FN), based on PageRank and how often the page changes.\n   - A high-priority URL, such as the CNN homepage, goes into a top-priority queue.\n2. Back queues (when to crawl):\n   - Each back queue (B1 to BK) holds URLs for one host at a time, in first-in-first-out order.\n   - A host-to-queue table records which back queue serves which host.\n   - A min-heap of (queue ID, next allowed time) tells the crawler which host may be fetched next.\n   - An idle fetcher pops the queue with the earliest next allowed time and fetches one page. It then puts that queue back in the heap with next allowed time = now + delay (for example 500 ms).\n\nResult: at most one request per host at a time, while thousands of different hosts are fetched in parallel.`,
         keyTakeaways: [
-          'Front queues determine WHAT to crawl next based on importance.',
-          'Back queues determine WHEN to crawl next based on host politeness.'
+          'Front queues decide what to crawl next, based on importance.',
+          'Back queues decide when to crawl next, based on how polite we must be to each host.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Spider Traps (Infinite Dynamic Calendar URLs)',
-        impact: 'A website with /calendar?year=2026&month=9 links to next month forever, causing crawler to download 10M useless pages.',
-        mitigation: 'Implement URL path length caps, maximum URL parameter depth filters, and per-domain page count caps.'
+        bottleneck: 'Spider traps (endless dynamic URLs)',
+        impact: 'A site with /calendar?year=2026&month=9 links to the next month forever, so the crawler downloads an endless stream of useless pages.',
+        mitigation: 'Cap the URL length, the number of query parameters and path depth, and the number of pages crawled per domain.'
       }
     ],
     interviewQA: [
       {
         question: 'How do you detect near-duplicate web pages (e.g., same article with different ads/timestamps)?',
-        hint: 'SimHash and Locality-Sensitive Hashing (LSH).',
-        goodAnswer: 'Compute a 64-bit SimHash fingerprint of the page text (tokens weighted by TF-IDF). Near-duplicate pages produce fingerprints that differ by only 1 to 3 bits (Hamming Distance <= 3). We index 64-bit hashes into 4 tables of 16-bit blocks to find matching fingerprints in O(1) time.',
-        pitfalls: 'Using MD5 or SHA-256 (cryptographic hashes change completely even if 1 character changes).'
+        hint: 'SimHash and locality-sensitive hashing (LSH).',
+        goodAnswer: 'Compute a 64-bit SimHash of the page text, with each word weighted (for example by TF-IDF). Near-duplicate pages get fingerprints that differ by only a few bits (Hamming distance of 3 or less). To find matches fast, split the fingerprint into 4 blocks of 16 bits and keep a lookup table per block. Any fingerprint within 3 bits of another must match it exactly in at least one block, so a lookup returns a small set of candidates. Then compare the full fingerprints of those candidates.',
+        pitfalls: 'Using MD5 or SHA-256. A cryptographic hash changes completely when one character changes, so it only finds exact copies.'
       }
     ],
     similarSystems: ['Bing Web Crawler', 'Common Crawl', 'Apache Nutch', 'Googlebot'],
@@ -138,60 +139,62 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'google-drive-dropbox',
     title: 'Design Google Drive / Dropbox (File Sync & Deduplication)',
     slug: 'google-drive-sync',
-    tagline: 'Cross-device file synchronization, 4MB block chunking, rolling checksum deduplication, and metadata concurrency.',
+    tagline: 'Sync files across devices by splitting them into 4 MB chunks, storing each unique chunk once, and handling edit conflicts.',
     category: 'Storage & Infrastructure',
     difficulty: 'Advanced',
     readTime: '24 min read',
     scaleSummary: {
       dau: '500 Million Active Users',
-      qps: '100,000 Sync QPS / 200,000 File Chunk Uploads/sec',
+      qps: '100,000 Sync QPS / 10,000 File Chunk Uploads/sec',
       storage: '100 Petabytes user files in S3',
       bandwidth: '40 GB/s Ingress & Egress'
     },
-    overview: 'A cloud file storage and synchronization service allows users to upload, edit, and access files from desktops, mobiles, and browsers. The system synchronizes delta changes across devices with minimal bandwidth using 4MB chunking, rolling hashes, and content-addressable storage.',
+    overview: 'A cloud storage and sync service lets users upload files and open them on a laptop, phone and browser. When a file changes, the client uploads only the changed 4 MB chunks (blocks of the file). Each chunk is stored once under its SHA-256 hash (content-addressable storage), so identical chunks are never stored twice.',
     keyChallenges: [
-      'Delta Sync Algorithm: If a user modifies 1 sentence in a 2GB PDF, sync only the modified 4MB block, not the entire 2GB file',
-      'Cross-User Deduplication: If 100,000 users save the same 1GB installer file, store it ONCE in S3 (Content-Addressable Storage)',
-      'Concurrent Edit Conflicts: Handling two offline devices editing the same document simultaneously',
-      'Real-Time Desktop Client Notification: Pushing sync events down long-lived WebSocket/HTTP long-poll channels'
+      'Delta sync: if a user changes one sentence in a 2 GB file, upload only the changed 4 MB chunk, not the whole file. This works for edits that do not shift the rest of the file.',
+      'Cross-user deduplication: if 100,000 users save the same 1 GB installer, store it once, using content-addressable storage (each chunk is stored under the hash of its content).',
+      'Edit conflicts: two offline devices can edit the same document at the same time.',
+      'Real-time notification: tell the other devices about a change quickly, over long-lived WebSocket or HTTP long-poll connections.'
     ],
     functionalRequirements: [
-      'Upload, download, and delete files/folders',
-      'Automatic cross-device background file synchronization',
-      'Chunk-level delta sync (upload only modified blocks)',
-      'File version history with 30-day restore',
-      'File sharing and folder permission management'
+      'Upload, download and delete files and folders.',
+      'Sync files between devices automatically in the background.',
+      'Delta sync at chunk level: upload only the modified chunks.',
+      'Keep file version history, with restore for 30 days.',
+      'Share files and manage folder permissions.'
     ],
     nonFunctionalRequirements: [
-      'Zero Data Loss: 99.999999999% (11 9s) file durability',
-      'Fast Sync Latency: Local edit synced to other devices in < 3 seconds',
-      'Bandwidth Optimization: Extreme deduplication and compression',
-      'High Availability: 99.99% for API and sync servers'
+      'Durability: 99.999999999% (11 nines), so files are not lost.',
+      'Sync latency: a local edit reaches other devices in under 3 seconds.',
+      'Bandwidth: save bandwidth with deduplication and compression.',
+      'Availability: 99.99% for the API and sync servers.'
     ],
-    outOfScope: ['Live multi-cursor collaborative document editing (Google Docs)'],
+    outOfScope: ['Live multi-cursor document editing (as in Google Docs).'],
     capacityEstimations: {
       assumptions: [
-        '500M users; 100M daily active users syncing files',
-        'Average user edits 5 files/day; Average file size: 10 MB (divided into 4MB chunks)',
-        'Storage: 500M * average 2 GB stored = 1 Exabyte (reduced to ~100 Petabytes after deduplication)'
+        '500M registered users; 100M of them are daily active users who sync files.',
+        'A user edits 5 files a day, so 100M × 5 = 500M edits per day. The average file is 10 MB (about 3 chunks of 4 MB).',
+        'Storage: 500M users × 2 GB stored on average = 1 EB. The estimate assumes deduplication cuts this to about 100 PB.',
+        'Delta sync uploads about 1 changed 4 MB chunk per edit: 500M chunks/day ≈ 5,800 chunks/s on average, 10,000 chunks/s at peak = 40 GB/s of ingress.',
+        '100 PB is one deduplicated copy, before S3 replication.'
       ],
       metrics: [
-        { label: 'Chunk Upload Rate', value: '200,000 chunks/s', formula: 'Peak 4MB delta chunk uploads', description: 'Object Storage Ingress' },
-        { label: 'Metadata QPS', value: '100,000 QPS', formula: 'Sync status and directory tree updates', description: 'PostgreSQL Metadata DB' },
-        { label: 'Deduplication Ratio', value: '60% Savings', formula: 'Hash-based Content-Addressable Storage', description: 'Storage cost reduction' }
+        { label: 'Chunk Upload Rate', value: '10,000 chunks/s', formula: '500M edits/day * 1 changed 4 MB chunk = 5,800/s avg, ~1.7x peak', description: 'Chunk writes to object storage' },
+        { label: 'Metadata QPS', value: '100,000 QPS', formula: 'Sync status and directory tree updates', description: 'Reads and writes to the PostgreSQL metadata database' },
+        { label: 'Deduplication Ratio', value: '90% Savings', formula: '1 EB logical -> ~100 PB physical via content-addressable chunks', description: 'Storage saved by keeping each unique chunk once' }
       ],
-      conclusion: 'Separating metadata (PostgreSQL) from binary chunks (S3/Content-Addressable Store) is mandatory.'
+      conclusion: 'Keep metadata (PostgreSQL) and file data (chunks in S3 or a similar content-addressable store) in separate systems. Metadata needs transactions and fast lookups. Chunks are large, never change, and are cheap to keep in object storage.'
     },
     architecture: {
-      summary: 'Desktop Client watches local filesystem (FSEvents/inotify) -> Splits file into 4MB chunks -> Hashes chunks with SHA-256 -> Calls Metadata DB to check which hashes exist -> Uploads ONLY missing chunks directly to S3 -> Commits new file version in PostgreSQL -> Sync Service broadcasts update to client other devices.',
+      summary: 'The desktop client watches the local file system (FSEvents or inotify), splits a changed file into 4 MB chunks, and hashes each chunk with SHA-256. It asks the metadata service which hashes already exist, then uploads only the missing chunks directly to S3. It then commits the new file version in PostgreSQL. The Sync Service tells the user other devices, which download the new chunks.',
       nodes: [
-        { id: 'client_laptop', label: 'Desktop Client (Mac/PC)', type: 'client', x: 8, y: 30, description: 'Runs local Chunking & Sync Engine' },
-        { id: 'client_phone', label: 'Mobile App', type: 'client', x: 8, y: 70, description: 'Receives real-time sync notification' },
-        { id: 'gateway', label: 'API & Sync Gateway', type: 'gateway', x: 30, y: 50, description: 'Routes chunk verification and sync sockets', techStack: ['Envoy / Go'] },
-        { id: 'sync_srv', label: 'Sync & Conflict Service', type: 'service', x: 55, y: 30, description: 'Manages file versions and commit sequences', techStack: ['Rust / Go'] },
-        { id: 'meta_db', label: 'File Metadata Store', type: 'database', x: 80, y: 30, description: 'Directory trees, chunk maps, user quotas', techStack: ['PostgreSQL (Sharded)'] },
-        { id: 'block_store', label: 'Chunk Storage (S3 / CAS)', type: 'storage', x: 80, y: 70, description: 'Stores immutable 4MB chunks named by SHA-256', techStack: ['AWS S3 Standard'] },
-        { id: 'notify_srv', label: 'Sync Notification Gateway', type: 'worker', x: 55, y: 70, description: 'Pushes sync events down WebSockets', techStack: ['Redis Pub/Sub + WebSockets'] }
+        { id: 'client_laptop', label: 'Desktop Client (Mac/PC)', type: 'client', x: 8, y: 30, description: 'Runs the local chunking and sync engine' },
+        { id: 'client_phone', label: 'Mobile App', type: 'client', x: 8, y: 70, description: 'Receives sync notifications and downloads changed chunks' },
+        { id: 'gateway', label: 'API & Sync Gateway', type: 'gateway', x: 30, y: 50, description: 'Routes hash checks and sync connections', techStack: ['Envoy / Go'] },
+        { id: 'sync_srv', label: 'Sync & Conflict Service', type: 'service', x: 55, y: 30, description: 'Tracks file versions and commits changes in order', techStack: ['Rust / Go'] },
+        { id: 'meta_db', label: 'File Metadata Store', type: 'database', x: 80, y: 30, description: 'Holds directory trees, chunk maps and user quotas', techStack: ['PostgreSQL (Sharded)'] },
+        { id: 'block_store', label: 'Chunk Storage (S3 / CAS)', type: 'storage', x: 80, y: 70, description: 'Stores immutable 4 MB chunks, each named by its SHA-256 hash', techStack: ['AWS S3 Standard'] },
+        { id: 'notify_srv', label: 'Sync Notification Gateway', type: 'worker', x: 55, y: 70, description: 'Pushes sync events to connected devices over WebSockets', techStack: ['Redis Pub/Sub + WebSockets'] }
       ],
       edges: [
         { id: 'e1', from: 'client_laptop', to: 'gateway', label: '1. POST /sync/check_hashes', protocol: 'HTTPS' },
@@ -204,17 +207,17 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         { id: 'e8', from: 'notify_srv', to: 'client_phone', label: '8. Push "Download Chunk H2_new"', protocol: 'WebSocket' }
       ],
       flowSteps: [
-        { step: 1, title: 'Local File Change Detection & Chunking', description: 'User edits presentation.pptx. Desktop client splits 40MB file into ten 4MB chunks and calculates SHA-256 hash for each chunk [H1, H2... H10].', activeNodes: ['client_laptop'], highlightDetails: 'Only Chunk #4 hash changed; remaining 9 chunks are untouched.', latencyEstimate: '15ms' },
-        { step: 2, title: 'Hash Registry Verification & Deduplication', description: 'Client sends list of 10 hashes to Sync Service. Server checks database: 9 chunks already exist in S3. Server responds: "Upload only Chunk #4 (H4_new)".', activeNodes: ['client_laptop', 'gateway', 'sync_srv', 'meta_db'], highlightDetails: 'Saves 90% upload bandwidth and S3 storage cost.', latencyEstimate: '25ms' },
-        { step: 3, title: 'Direct Chunk Upload to S3', description: 'Client uploads the single 4MB chunk directly to S3 with key = SHA256(H4_new).', activeNodes: ['client_laptop', 'block_store'], highlightDetails: 'Content-Addressable Storage guarantees immutable deduplication.', latencyEstimate: '350ms' },
-        { step: 4, title: 'Atomic Version Commit & Real-Time Sync Push', description: 'Sync Service creates Version 2 pointing to [H1, H2, H3, H4_new, H5... H10] in PostgreSQL and emits notification to all user connected devices to fetch H4_new.', activeNodes: ['sync_srv', 'meta_db', 'notify_srv', 'client_phone'], highlightDetails: 'Mobile app downloads only the single 4MB delta chunk in < 1 second.', latencyEstimate: '200ms' }
+        { step: 1, title: 'Detect the change and split the file into chunks', description: 'The user edits presentation.pptx. The desktop client splits the 40 MB file into ten 4 MB chunks and computes a SHA-256 hash for each one (H1 to H10).', activeNodes: ['client_laptop'], highlightDetails: 'Only chunk 4 has a new hash. The other 9 chunks are unchanged.', latencyEstimate: '15ms' },
+        { step: 2, title: 'Check which chunks the server already has', description: 'The client sends the list of 10 hashes to the Sync Service. The server checks its chunk registry and finds that 9 chunks already exist. It replies: upload only chunk 4 (H4_new).', activeNodes: ['client_laptop', 'gateway', 'sync_srv', 'meta_db'], highlightDetails: 'In this example 9 of 10 chunks are not uploaded, which saves bandwidth and storage.', latencyEstimate: '25ms' },
+        { step: 3, title: 'Upload the new chunk to S3', description: 'The client uploads the single 4 MB chunk directly to S3, using a pre-signed URL from the server. The object key is the chunk hash, H4_new.', activeNodes: ['client_laptop', 'block_store'], highlightDetails: 'The key is the hash of the content, so a stored chunk never changes and identical chunks are stored once.', latencyEstimate: '350ms' },
+        { step: 4, title: 'Commit the new version and notify other devices', description: 'The Sync Service writes version 2 in PostgreSQL, pointing to [H1, H2, H3, H4_new, H5 ... H10]. It then tells the user other devices to fetch H4_new.', activeNodes: ['sync_srv', 'meta_db', 'notify_srv', 'client_phone'], highlightDetails: 'The phone downloads one 4 MB chunk instead of the whole 40 MB file.', latencyEstimate: '200ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/api/v1/files/verify-chunks',
-        description: 'Check which chunk hashes already exist on server',
+        description: 'Ask which chunk hashes the server does not have yet',
         requestBody: '{\n  "file_id": "fl_9821",\n  "chunk_hashes": ["a8f9...", "b2c1...", "c3d4..."]\n}',
         responseBody: '{\n  "missing_chunks": ["b2c1..."],\n  "upload_urls": { "b2c1...": "https://s3.../b2c1..." }\n}'
       }
@@ -227,37 +230,37 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         fields: [
           { name: 'file_id', type: 'UUID', isPrimary: true },
           { name: 'version', type: 'INT', isPrimary: true },
-          { name: 'chunk_hashes', type: 'JSONB', notes: 'Ordered array of 4MB SHA-256 chunk keys' },
+          { name: 'chunk_hashes', type: 'JSONB', notes: 'Ordered list of the SHA-256 keys of the 4 MB chunks' },
           { name: 'size_bytes', type: 'BIGINT' },
           { name: 'updated_at', type: 'TIMESTAMP' }
         ],
-        notes: 'PostgreSQL table maintaining immutable history of file chunk mappings.'
+        notes: 'PostgreSQL table with the immutable version history of each file (the chunk list for every version).'
       }
     ],
     deepDives: [
       {
-        title: 'Conflict Resolution: Handling Concurrent Edits Across Multiple Devices',
-        subtitle: 'How Dropbox resolves simultaneous offline file modifications without data loss',
-        content: `Scenario: User edits "report.docx" on Laptop while on an airplane (offline). Simultaneously, User edits "report.docx" on Office Desktop.\n\nWhen Laptop connects to Wi-Fi:\n1. Laptop attempts to commit Version 3 based on base Version 2.\n2. Server checks Metadata DB: Office Desktop already committed Version 3 based on Version 2 (Optimistic Concurrency Check).\n3. Conflict Resolution Policy:\n   - Server commits Laptop changes as a branched conflict file: "report (User's conflicted copy 2026-08-28).docx".\n   - Both versions are preserved in full; zero user data is ever overwritten or lost!\n   - Desktop client displays a subtle notification explaining the conflicted copy creation.`,
+        title: 'Conflict resolution: concurrent edits on several devices',
+        subtitle: 'How a sync service keeps both versions when two devices edit the same file offline',
+        content: `Scenario: a user edits report.docx on a laptop while offline on a plane. The same user also edits report.docx on an office desktop.\n\nWhen the laptop reconnects:\n1. The laptop tries to commit version 3, based on version 2.\n2. The server checks the metadata DB. The desktop already committed version 3 based on version 2, so the laptop commit is based on an out-of-date version. This is a conflict, found by an optimistic concurrency check.\n3. Resolution policy:\n   - The server saves the laptop's changes as a separate conflicted copy, for example "report (User's conflicted copy 2026-08-28).docx".\n   - Both versions are kept in full, so no edit is lost.\n   - The client shows a short notice that a conflicted copy was created.\n\nThe user then merges the two files by hand. Automatic merging is only safe for formats the service understands, so for binary files a conflicted copy is the standard approach.`,
         keyTakeaways: [
-          'Optimistic concurrency control with base_version checks prevents silent overwrites.',
-          'Creating conflicted copies is the battle-tested standard for binary file conflicts.'
+          'Check the base version on every commit (optimistic concurrency control). This stops one device from silently overwriting another.',
+          'For binary files, creating a conflicted copy is the standard, safe approach.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'S3 Garbage Collection of Orphaned Chunks',
-        impact: 'When users delete old file versions, reference counts on shared chunks must be managed to avoid deleting chunks still used by other files.',
-        mitigation: 'Maintain a Chunk Reference Count Table: Increment ref_count when a file references a chunk hash; decrement when deleted. Only delete from S3 when ref_count == 0 via asynchronous background Sweeper.'
+        bottleneck: 'Garbage collection of unreferenced chunks in S3',
+        impact: 'When users delete old versions, a chunk may still be used by other files or users. Deleting it too early would corrupt those files.',
+        mitigation: 'Keep a reference count per chunk. Increase it when a file version uses the chunk and decrease it when that version is deleted. A background sweeper deletes a chunk from S3 only when its count is 0 and has stayed at 0 for a grace period, so a chunk that a new upload is about to reference is not removed.'
       }
     ],
     interviewQA: [
       {
         question: 'Why fixed-size 4MB chunking vs variable-size content-defined chunking (Rabin Fingerprinting)?',
-        hint: 'Inserting 1 byte at the start of a file shifts all subsequent fixed 4MB boundaries.',
-        goodAnswer: 'In fixed-size chunking, inserting 1 byte at byte 0 shifts all chunk boundaries, invalidating all subsequent chunk hashes. Advanced sync engines (Dropbox) use Content-Defined Chunking (CDC via Rabin Fingerprints / FastCDC) where chunk boundaries are determined by byte content patterns, keeping unchanged chunks identical even after inserts.',
-        pitfalls: 'Assuming fixed-size chunking is optimal for all text file insert scenarios.'
+        hint: 'Inserting one byte at the start of a file shifts every fixed 4 MB boundary after it.',
+        goodAnswer: 'With fixed-size chunks, inserting 1 byte at the start of a file shifts every chunk boundary, so all later chunks get new hashes and must be uploaded again. With content-defined chunking (CDC, for example Rabin fingerprints or FastCDC), a boundary is chosen where the file content matches a pattern. An insert changes only the chunks around it, and the rest keep the same hashes. The cost is more CPU work and chunks of varying size. Dropbox uses fixed 4 MB blocks, which is simple and works well for in-place edits. Backup tools such as restic use CDC.',
+        pitfalls: 'Assuming fixed-size chunking is best for every kind of edit, including inserts near the start of a file.'
       }
     ],
     similarSystems: ['Dropbox', 'Box', 'OneDrive', 'iCloud Drive'],
@@ -267,55 +270,56 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'distributed-rate-limiter',
     title: 'Design a Distributed Rate Limiter Service',
     slug: 'distributed-rate-limiter',
-    tagline: 'High-throughput, low-latency API traffic throttling, Redis sliding window counters, and edge token bucket proxies.',
+    tagline: 'Throttle API traffic with fast checks, using Redis sliding-window counters and a local cache at the gateway.',
     category: 'Storage & Infrastructure',
     difficulty: 'Intermediate',
     readTime: '18 min read',
     scaleSummary: {
       dau: '10 Billion API Requests / day',
       qps: '1,000,000 Requests/sec peak rate limiting checks',
-      storage: '50 GB Redis in-memory sliding window counters',
+      storage: '3.2 GB Redis in-memory sliding window counters',
       bandwidth: '5 GB/s Network Filter'
     },
-    overview: 'A distributed rate limiter protects backend services from DDoS attacks, API abuse, brute-force login attempts, and resource exhaustion by throttling requests based on IP address, User ID, or API Key with sub-millisecond overhead.',
+    overview: 'A distributed rate limiter protects backend services from abuse, brute-force login attempts and overload. It limits requests per IP address, user ID or API key, and the check adds about a millisecond or less to each request.',
     keyChallenges: [
-      'Sub-Millisecond Evaluation: Rate check must execute in < 2ms without becoming the bottleneck for the entire infrastructure',
-      'Race Conditions in Distributed Clusters: Preventing 10 concurrent requests from bypassing rate limits during read-update-write cycles',
-      'Memory Efficiency: Tracking limits for 100M active client keys without consuming terabytes of RAM',
-      'Fail-Open vs Fail-Closed Strategy: Deciding whether to allow traffic if the rate limiter Redis cluster crashes'
+      'Speed: the check must take about 1 ms, so it does not become the bottleneck for every request.',
+      'Race conditions: if 10 requests arrive at once, a read-then-update sequence can let all of them through. The check must be atomic (it runs as one indivisible step).',
+      'Memory: track limits for 100M active keys without needing terabytes of RAM.',
+      'Failure policy: decide whether to allow traffic (fail open) or block it (fail closed) when the Redis cluster is down.'
     ],
     functionalRequirements: [
-      'Limit API calls by IP, User ID, or API Token (e.g. 100 requests per minute)',
-      'Return standard HTTP 429 Too Many Requests with Retry-After headers',
-      'Support configurable tiers (Free: 60 req/min, Pro: 10,000 req/min)',
-      'Support burst allowances (Token Bucket) and smooth traffic (Leaky Bucket)'
+      'Limit calls by IP, user ID or API token (for example 100 requests per minute).',
+      'Return HTTP 429 Too Many Requests with a Retry-After header when the limit is exceeded.',
+      'Support limit tiers (Free: 60 requests/min, Pro: 10,000 requests/min).',
+      'Support bursts (token bucket) and smooth, steady traffic (leaky bucket).'
     ],
     nonFunctionalRequirements: [
-      'Ultra Low Latency: Rate check latency < 1ms at P99',
-      'High Availability 99.999%',
-      'Minimal Memory Footprint per rate limited entity (< 32 bytes)'
+      'Latency: the rate check takes under 1 ms at P99.',
+      'Availability: 99.999%.',
+      'Memory: under 32 bytes of counter data per tracked key.'
     ],
-    outOfScope: ['Web Application Firewall (WAF) SQL Injection payload inspection'],
+    outOfScope: ['Web application firewall (WAF) inspection, such as detecting SQL injection in request bodies.'],
     capacityEstimations: {
       assumptions: [
-        '1 Million QPS peak API requests evaluated',
-        '100 Million active users/tokens tracked concurrently',
-        'Memory per key using Sliding Window Counter: 32 bytes (2 integer counters in Redis)'
+        '1 million requests per second at peak, each needing a rate check.',
+        '100 million active users or tokens are tracked at once.',
+        'A sliding window counter needs about 32 bytes per key (two integer counters).',
+        '100M keys × 32 bytes = 3.2 GB for one copy, before replication. Real Redis keys carry extra overhead (the key name and internal structures), so treat 3.2 GB as a lower bound.'
       ],
       metrics: [
-        { label: 'Evaluation QPS', value: '1,000,000 QPS', formula: 'Peak global gateway traffic', description: 'Redis Cluster throughput' },
+        { label: 'Evaluation QPS', value: '1,000,000 QPS', formula: 'Peak global gateway traffic', description: 'Throughput the Redis cluster must handle' },
         { label: 'Total Redis RAM', value: '3.2 GB RAM', formula: '100M keys * 32 bytes', description: 'Memory for all rate limit counters' }
       ],
-      conclusion: 'A 10-node Redis Cluster running atomic Lua scripts evaluates 1M checks/sec effortlessly.'
+      conclusion: 'About 10 Redis Cluster nodes can cover 1M checks per second if each handles about 100,000. A Lua script runs each check atomically in one round trip. Add nodes if load tests show a node cannot keep up.'
     },
     architecture: {
-      summary: 'Incoming request arrives at API Gateway -> Rate Limiter Filter executes atomic Lua script against nearest Redis Cluster -> If allowed, proxies to Backend Microservice; If exceeded, immediately returns HTTP 429.',
+      summary: 'A request reaches the API gateway. The rate limit filter first checks a local ban list, then runs an atomic Lua script on the nearest Redis cluster. If the request is allowed, the gateway forwards it to the backend. If the limit is exceeded, the gateway returns HTTP 429 at once.',
       nodes: [
-        { id: 'client', label: 'API Consumer', type: 'client', x: 8, y: 50, description: 'Sends HTTP requests with API key' },
-        { id: 'gateway', label: 'API Gateway (Envoy / Kong)', type: 'gateway', x: 35, y: 50, description: 'Runs rate limit filter middleware', techStack: ['Envoy / Nginx'] },
-        { id: 'local_cache', label: 'Local Memory Tier (Caffeine)', type: 'cache', x: 35, y: 15, description: 'Blocks banned IPs locally for 60s', techStack: ['In-Memory RAM'] },
-        { id: 'redis_cluster', label: 'Redis Rate Limiter Cluster', type: 'cache', x: 65, y: 50, description: 'Stores sliding window counters', techStack: ['Redis 7 Cluster'], scaleMetric: 'Sub-millisecond Lua script' },
-        { id: 'backend', label: 'Protected Backend Service', type: 'service', x: 92, y: 50, description: 'Core application business logic', techStack: ['Microservices'] }
+        { id: 'client', label: 'API Consumer', type: 'client', x: 8, y: 50, description: 'Sends HTTP requests with an API key' },
+        { id: 'gateway', label: 'API Gateway (Envoy / Kong)', type: 'gateway', x: 35, y: 50, description: 'Runs the rate limit filter', techStack: ['Envoy / Nginx'] },
+        { id: 'local_cache', label: 'Local Memory Tier (Caffeine)', type: 'cache', x: 35, y: 15, description: 'Blocks banned IPs locally for 60 seconds, without a Redis call', techStack: ['In-Memory RAM'] },
+        { id: 'redis_cluster', label: 'Redis Rate Limiter Cluster', type: 'cache', x: 65, y: 50, description: 'Stores the sliding window counters', techStack: ['Redis 7 Cluster'], scaleMetric: 'Sub-millisecond Lua script' },
+        { id: 'backend', label: 'Protected Backend Service', type: 'service', x: 92, y: 50, description: 'Core application logic', techStack: ['Microservices'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'gateway', label: '1. GET /api/v1/resource', protocol: 'HTTPS' },
@@ -325,16 +329,16 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         { id: 'e5', from: 'gateway', to: 'client', label: 'If Exceeded: HTTP 429', protocol: 'HTTPS' }
       ],
       flowSteps: [
-        { step: 1, title: 'Request Interception at Gateway', description: 'API Gateway extracts identifier (e.g. rate_limit:user_42) and checks local memory cache for active ban.', activeNodes: ['client', 'gateway', 'local_cache'], highlightDetails: 'Bypasses Redis network hop for repeat abusive attackers.', latencyEstimate: '0.1ms' },
-        { step: 2, title: 'Atomic Redis Sliding Window Counter', description: 'Gateway executes Lua script in Redis: calculates weighted average of requests in current and previous minute window. If under limit, increments counter and returns 1 (Allowed).', activeNodes: ['gateway', 'redis_cluster'], highlightDetails: 'Atomic execution avoids race conditions in 1 network roundtrip.', latencyEstimate: '0.8ms' },
-        { step: 3, title: 'Response Headers & Gateway Routing', description: 'Gateway attaches X-RateLimit-Remaining: 42 and forwards request to backend microservice.', activeNodes: ['gateway', 'backend'], highlightDetails: 'If rejected, returns 429 Too Many Requests with Retry-After: 12.', latencyEstimate: '0.1ms' }
+        { step: 1, title: 'Intercept the request at the gateway', description: 'The gateway extracts the identifier (for example rate_limit:user_42) and checks its local memory cache for an active ban.', activeNodes: ['client', 'gateway', 'local_cache'], highlightDetails: 'Repeat offenders are blocked without a network call to Redis.', latencyEstimate: '0.1ms' },
+        { step: 2, title: 'Check the sliding window counter in Redis', description: 'The gateway runs a Lua script in Redis. It estimates the requests in the last minute from the previous window count (weighted by how much of that window still overlaps) plus the current window count. If the total is under the limit, it increments the counter and returns 1 (allowed).', activeNodes: ['gateway', 'redis_cluster'], highlightDetails: 'The script runs atomically in one network round trip, so concurrent requests cannot race.', latencyEstimate: '0.8ms' },
+        { step: 3, title: 'Set response headers and route the request', description: 'The gateway adds X-RateLimit-Remaining: 42 and forwards the request to the backend.', activeNodes: ['gateway', 'backend'], highlightDetails: 'A rejected request gets 429 Too Many Requests with a Retry-After header (for example Retry-After: 12).', latencyEstimate: '0.1ms' }
       ]
     },
     apiDesign: [
       {
         method: 'GET',
         path: '/api/v1/data',
-        description: 'Standard rate limited endpoint',
+        description: 'A normal endpoint protected by the rate limiter',
         headers: ['X-RateLimit-Limit: 100', 'X-RateLimit-Remaining: 84', 'X-RateLimit-Reset: 1724000060'],
         responseBody: '{\n  "data": "Success"\n}'
       }
@@ -349,33 +353,33 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
           { name: 'max_requests_per_minute', type: 'INT' },
           { name: 'burst_capacity', type: 'INT' }
         ],
-        notes: 'Cached in API Gateway memory for zero DB latency lookups.'
+        notes: 'Cached in gateway memory, so rule lookups do not need a database call.'
       }
     ],
     deepDives: [
       {
-        title: 'Sliding Window Counter Algorithm: The Optimal Memory-Accuracy Balance',
-        subtitle: 'Why Sliding Window Counter beats Fixed Window and Sliding Window Log',
-        content: `Comparison of Rate Limiting Algorithms:\n1. Fixed Window: 100 req/min. If user sends 100 requests at 00:59 and 100 requests at 01:01, 200 requests pass in a 2-second interval (2x traffic spike!).\n2. Sliding Window Log (Redis ZSET): Stores timestamps of every request. Extremely accurate, but memory is O(N) requests (100k requests consume megabytes of RAM).\n3. Sliding Window Counter (Cloudflare / Stripe Standard):\n   - Stores only 2 counters: Previous Window Count and Current Window Count.\n   - Formula: Requests = (Previous_Count * (1 - % of current window elapsed)) + Current_Count.\n   - Memory is strictly O(1) (~32 bytes per key) with 99.9% smoothing accuracy!`,
+        title: 'Sliding window counter: a good balance of memory and accuracy',
+        subtitle: 'Why it beats the fixed window and the sliding window log',
+        content: `Three common algorithms:\n1. Fixed window: limit 100 requests per minute. A user can send 100 requests at 00:59 and 100 more at 01:01. Then 200 requests pass in 2 seconds, twice the limit.\n2. Sliding window log (a Redis sorted set): stores the timestamp of every request. It is exact, but memory grows with the number of requests in the window (for example 100,000 timestamps for one busy key).\n3. Sliding window counter (used by Cloudflare):\n   - Stores only 2 counters: the previous window count and the current window count.\n   - Estimate = Previous_Count × (1 - fraction of the current window already elapsed) + Current_Count.\n   - Memory is O(1) per key (about 32 bytes of counters).\n   - It is an approximation. It assumes the previous window's requests were spread evenly. In practice this is close enough.`,
         keyTakeaways: [
-          'Sliding Window Counter uses 95% less RAM than Sliding Window Log.',
-          'Completely eliminates boundary burst vulnerabilities.'
+          'The sliding window counter uses a small, fixed amount of memory per key. The sliding window log grows with the request count.',
+          'It greatly reduces the burst problem at window edges, though it is not exact.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Redis Rate Limiter Cluster Outage',
-        impact: 'If Redis cluster fails, does the entire company website crash?',
-        mitigation: 'Fail-Open Policy: If Redis network timeout occurs (> 5ms), log an alert and let the request proceed to avoid taking down critical customer traffic.'
+        bottleneck: 'Redis rate limiter cluster outage',
+        impact: 'If Redis is down, every request that needs a rate check could fail, and the whole product could go down with it.',
+        mitigation: 'Fail open: if a Redis call times out (for example after 5 ms), log an alert and let the request through, so a limiter failure does not take down customer traffic. The cost is that abuse is not limited during the outage. A coarse in-memory limit on each gateway can cover that gap.'
       }
     ],
     interviewQA: [
       {
         question: 'How do you handle rate limiting across multiple global cloud regions (US, EU, Asia)?',
         hint: 'Cross-region synchronization latency.',
-        goodAnswer: 'Instead of syncing every counter cross-region (which adds 150ms WAN latency), use Local Regional Rate Limiters with partitioned quotas (e.g. if global limit is 1,000 req/min, assign 400 to US, 400 to EU, 200 to Asia) with periodic asynchronous batch synchronization.',
-        pitfalls: 'Calling a single central US Redis instance from European servers on every request.'
+        goodAnswer: 'Do not sync every counter across regions. A cross-region round trip often takes 100 ms or more, far above the 1 ms budget. Instead, run a rate limiter in each region and split the global quota between them (for example, of 1,000 requests/min: 400 for the US, 400 for the EU, 200 for Asia). Regions then sync their usage in the background in batches and can rebalance the quotas. The limit can be slightly exceeded between syncs.',
+        pitfalls: 'Calling one central Redis in the US from European servers on every request.'
       }
     ],
     similarSystems: ['Cloudflare Rate Limiting', 'Kong Rate Limiter', 'AWS WAF', 'Envoy Ratelimit'],
@@ -385,60 +389,61 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'notification-system',
     title: 'Design a Scalable Distributed Notification System',
     slug: 'notification-platform',
-    tagline: 'Multi-channel alert routing (APNs, FCM, SMS, Email), priority queues, rate limits, and batch digest engines.',
+    tagline: 'Send alerts to phones, SMS and email through one system, with priority queues, rate limits and digests.',
     category: 'Storage & Infrastructure',
     difficulty: 'Intermediate',
     readTime: '20 min read',
     scaleSummary: {
       dau: '1 Billion Notifications / day',
       qps: '50,000 Alerts/sec peak ingestion',
-      storage: '20 TB / year notification log and user preferences',
-      bandwidth: '10 GB/s Network Egress'
+      storage: '182.5 TB / year notification log and user preferences',
+      bandwidth: '25 MB/s Peak Network Egress'
     },
-    overview: 'A central notification platform routes transactional and promotional alerts across iOS Push (Apple APNs), Android Push (Google FCM), SMS (Twilio), and Email (SendGrid/SES). The system handles user preferences, deduplication, rate limiting, and batch digests.',
+    overview: 'A notification platform sends transactional and promotional messages through iOS push (Apple APNs), Android push (Google FCM), SMS (Twilio) and email (SendGrid or SES). It also applies user preferences, removes duplicates, limits send rates, and groups many events into one digest.',
     keyChallenges: [
-      'Multi-Channel Provider Abstraction: Handling varying latency and failure modes of third-party vendors (APNs, FCM, Twilio, SendGrid)',
-      'User Preference & Do-Not-Disturb (DND) Enforcement: Suppressing non-critical alerts during user quiet hours',
-      'Notification Batching & Digesting: Aggregating "Alice liked your post, Bob liked your post..." into a single digest alert',
-      'Priority Queue Routing: Ensuring OTP verification codes are delivered in < 2 seconds while marketing newsletters are throttled'
+      'Provider differences: each vendor (APNs, FCM, Twilio, SendGrid) has its own speed, limits and failure modes, so hide them behind one interface.',
+      'User preferences and Do Not Disturb (DND): hold back non-urgent alerts during a user quiet hours.',
+      'Batching: combine "Alice liked your post", "Bob liked your post" and so on into one digest notification.',
+      'Priorities: deliver one-time passcodes (OTP) within 3 seconds, while marketing messages can wait and are throttled.'
     ],
     functionalRequirements: [
-      'Send alerts across Push, SMS, Email, and In-App notification center',
-      'Support Priority levels (Critical OTP vs Marketing Broadcast)',
-      'Enforce user channel preferences and unsubscribe settings',
-      'Notification batching / digest window (e.g. group likes every 15 minutes)',
-      'Track delivery, open, and bounce receipts'
+      'Send alerts by push, SMS, email and an in-app notification center.',
+      'Support priority levels (critical OTP vs marketing broadcast).',
+      'Respect user channel preferences and unsubscribe settings.',
+      'Group events into a digest over a time window (for example, likes every 15 minutes).',
+      'Track delivery, open and bounce receipts.'
     ],
     nonFunctionalRequirements: [
-      'Critical OTP delivery latency < 3 seconds (P99)',
-      'High Reliability: Zero lost transactional notifications',
-      'Scalable to 1 Billion messages per day',
-      'Rate limiting to prevent spamming users'
+      'OTP delivery in under 3 seconds at P99.',
+      'Reliability: no transactional notification may be lost (deliver at least once).',
+      'Scale: 1 billion messages per day.',
+      'Rate limits so users are not spammed.'
     ],
-    outOfScope: ['Rich marketing email HTML drag-and-drop template designer'],
+    outOfScope: ['A drag-and-drop designer for rich marketing email templates.'],
     capacityEstimations: {
       assumptions: [
-        '1 Billion notifications/day (~11,600 /sec avg, 50,000 peak QPS)',
-        'Breakdown: 70% Push (APNs/FCM), 20% In-App, 8% Email, 2% SMS',
-        'Average notification payload: 500 bytes'
+        '1 billion notifications/day: about 11,600/s on average and 50,000/s at peak.',
+        'Mix: 70% push (APNs/FCM), 20% in-app, 8% email, 2% SMS.',
+        'An average payload is 500 bytes.',
+        'Logging every notification at 500 bytes = 500 GB/day (182.5 TB/year), one copy before replication. Peak egress = 50,000 × 500 bytes = 25 MB/s.'
       ],
       metrics: [
-        { label: 'Ingestion QPS', value: '50,000 / sec', formula: 'Peak notification triggers', description: 'Kafka topic ingestion' },
-        { label: 'Push Delivery Rate', value: '35,000 push/sec', formula: 'Concurrent APNs/FCM HTTP/2 streams', description: 'Push Worker Fleet' }
+        { label: 'Ingestion QPS', value: '50,000 / sec', formula: 'Peak notification triggers', description: 'Messages per second entering the Kafka topic' },
+        { label: 'Push Delivery Rate', value: '35,000 push/sec', formula: 'Concurrent APNs/FCM HTTP/2 streams', description: 'Push worker fleet sending over HTTP/2 connections' }
       ],
-      conclusion: 'Dedicated Kafka priority topics per channel prevent slow email queues from stalling critical SMS OTP codes.'
+      conclusion: 'Use separate Kafka topics per priority, so a slow backlog of bulk email cannot delay critical SMS OTP codes.'
     },
     architecture: {
-      summary: 'Internal Services trigger notification API -> Notification Service checks user preferences in Redis/DB -> Routes to Kafka Priority Topics (High/Med/Low) -> Channel Workers (Push, SMS, Email) execute HTTP/2 calls to APNs, FCM, Twilio, SendGrid -> Logs delivery status to Cassandra.',
+      summary: 'Internal services call the notification API. The API removes duplicates and checks user preferences in Redis, then routes the message to a Kafka topic by priority (high, medium or low). Channel workers (push, SMS, email) call APNs, FCM, Twilio and SendGrid. Delivery status is logged to Cassandra.',
       nodes: [
-        { id: 'services', label: 'Internal Microservices', type: 'service', x: 8, y: 50, description: 'Order, Auth, and Social services trigger alerts' },
-        { id: 'gateway', label: 'Notification API Service', type: 'service', x: 30, y: 50, description: 'Validates payload & deduplicates events', techStack: ['Go / Node.js'] },
-        { id: 'pref_cache', label: 'User Preferences (Redis)', type: 'cache', x: 30, y: 15, description: 'Opt-in channels, DND hours, device tokens', techStack: ['Redis'] },
-        { id: 'kafka_high', label: 'High Priority Queue (OTP)', type: 'queue', x: 55, y: 25, description: 'Zero lag queue for auth codes & fraud alerts', techStack: ['Kafka'] },
-        { id: 'kafka_low', label: 'Low Priority Queue (Marketing)', type: 'queue', x: 55, y: 75, description: 'Batched marketing & promotional stream', techStack: ['Kafka'] },
-        { id: 'push_workers', label: 'Push Workers (APNs/FCM)', type: 'worker', x: 80, y: 20, description: 'Maintains HTTP/2 connection pool to Apple/Google', techStack: ['Go Workers'] },
-        { id: 'sms_workers', label: 'SMS Workers (Twilio)', type: 'worker', x: 80, y: 50, description: 'Dispatches SMS via carrier aggregators', techStack: ['Twilio API'] },
-        { id: 'email_workers', label: 'Email Workers (SES/SendGrid)', type: 'worker', x: 80, y: 80, description: 'Renders templates & sends SMTP/API emails', techStack: ['AWS SES'] }
+        { id: 'services', label: 'Internal Microservices', type: 'service', x: 8, y: 50, description: 'Order, auth and social services that trigger alerts' },
+        { id: 'gateway', label: 'Notification API Service', type: 'service', x: 30, y: 50, description: 'Validates the request and removes duplicate events', techStack: ['Go / Node.js'] },
+        { id: 'pref_cache', label: 'User Preferences (Redis)', type: 'cache', x: 30, y: 15, description: 'Holds opt-in channels, DND hours and device tokens', techStack: ['Redis'] },
+        { id: 'kafka_high', label: 'High Priority Queue (OTP)', type: 'queue', x: 55, y: 25, description: 'Short, fast queue for auth codes and fraud alerts', techStack: ['Kafka'] },
+        { id: 'kafka_low', label: 'Low Priority Queue (Marketing)', type: 'queue', x: 55, y: 75, description: 'Slower stream for marketing and promotional messages', techStack: ['Kafka'] },
+        { id: 'push_workers', label: 'Push Workers (APNs/FCM)', type: 'worker', x: 80, y: 20, description: 'Keeps a pool of HTTP/2 connections to Apple and Google', techStack: ['Go Workers'] },
+        { id: 'sms_workers', label: 'SMS Workers (Twilio)', type: 'worker', x: 80, y: 50, description: 'Sends SMS through carrier aggregators', techStack: ['Twilio API'] },
+        { id: 'email_workers', label: 'Email Workers (SES/SendGrid)', type: 'worker', x: 80, y: 80, description: 'Renders templates and sends email through SMTP or an API', techStack: ['AWS SES'] }
       ],
       edges: [
         { id: 'e1', from: 'services', to: 'gateway', label: '1. Trigger Alert', protocol: 'Internal RPC' },
@@ -450,16 +455,16 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         { id: 'e7', from: 'kafka_low', to: 'email_workers', label: '4. Consume Email Job', protocol: 'Internal RPC', isAsync: true }
       ],
       flowSteps: [
-        { step: 1, title: 'Notification Ingestion & Deduplication', description: 'Auth Service sends OTP alert. Notification Service checks Redis for identical notification_fingerprint in last 60 seconds (prevents duplicate sends).', activeNodes: ['services', 'gateway'], highlightDetails: 'Deduplication window avoids accidental double-charges on SMS.', latencyEstimate: '5ms' },
-        { step: 2, title: 'Preference Check & Channel Routing', description: 'Checks user settings in Redis: user enabled Push + SMS, DND disabled. Routes OTP to High Priority Kafka Topic.', activeNodes: ['gateway', 'pref_cache', 'kafka_high'], highlightDetails: 'Sub-millisecond preference evaluation.', latencyEstimate: '3ms' },
-        { step: 3, title: 'Direct APNs/FCM HTTP/2 Execution', description: 'Push Worker pulls job and streams payload over persistent TLS HTTP/2 connection to Apple APNs server in < 100ms.', activeNodes: ['kafka_high', 'push_workers'], highlightDetails: 'Persistent HTTP/2 multiplexing eliminates handshake overhead.', latencyEstimate: '150ms' }
+        { step: 1, title: 'Receive the event and remove duplicates', description: 'The auth service sends an OTP alert. The notification service checks Redis for an identical notification fingerprint in the last 60 seconds, which stops duplicate sends.', activeNodes: ['services', 'gateway'], highlightDetails: 'The dedup window avoids sending the same SMS twice, which would cost money and annoy the user.', latencyEstimate: '5ms' },
+        { step: 2, title: 'Check preferences and pick channels', description: 'The service reads the user settings in Redis: push and SMS are on, and DND is off. It routes the OTP to the high-priority Kafka topic.', activeNodes: ['gateway', 'pref_cache', 'kafka_high'], highlightDetails: 'A Redis lookup is fast, so this check adds little delay.', latencyEstimate: '3ms' },
+        { step: 3, title: 'Send the push over HTTP/2', description: 'A push worker takes the job and sends the payload to Apple APNs over a persistent TLS HTTP/2 connection.', activeNodes: ['kafka_high', 'push_workers'], highlightDetails: 'Reusing connections avoids a new TLS handshake for every message.', latencyEstimate: '150ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/api/v1/notifications/send',
-        description: 'Trigger notification to a user',
+        description: 'Send a notification to a user',
         requestBody: '{\n  "recipient_id": "usr_9921",\n  "template_id": "otp_verification",\n  "priority": "HIGH",\n  "params": { "code": "849201" }\n}',
         responseBody: '{\n  "notification_id": "notif_88192",\n  "status": "QUEUED"\n}'
       }
@@ -475,33 +480,33 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
           { name: 'platform', type: 'VARCHAR(10)', notes: 'IOS, ANDROID, WEB' },
           { name: 'last_active_at', type: 'TIMESTAMP' }
         ],
-        notes: 'PostgreSQL table indexing mobile push registration tokens.'
+        notes: 'PostgreSQL table of mobile push registration tokens.'
       }
     ],
     deepDives: [
       {
-        title: 'Notification Digesting & Debouncing Engine',
-        subtitle: 'Turning 50 separate "liked your post" alerts into 1 summary notification',
-        content: `When a viral post gets 500 likes in 10 minutes, sending 500 individual push notifications causes users to uninstall the application.\n\nDigest Aggregation Architecture:\n1. When a social event occurs, do not dispatch push immediately. Push the event into a Redis Sorted Set keyed by user_id and post_id.\n2. Set a delayed timer (e.g. 5 minutes) via Kafka Delayed Message or Redis Expiration.\n3. When timer fires, worker pops all events from Redis ZSET: Count = 42 likes.\n4. Renders single template: "Alice and 41 others liked your photo" and sends 1 push notification!`,
+        title: 'Digests and debouncing',
+        subtitle: 'Turning 50 separate "liked your post" alerts into one summary',
+        content: `When a viral post gets 500 likes in 10 minutes, 500 separate push notifications annoy users and may make them turn notifications off.\n\nHow a digest works:\n1. When a social event occurs, do not send a push right away. Add the event to a Redis sorted set keyed by user_id and post_id.\n2. Schedule a delay (for example 5 minutes). Kafka has no built-in delayed delivery, so use a separate scheduler, a delay queue such as RabbitMQ with message TTL, or a job that scans for digests that are due.\n3. When the timer fires, a worker reads and removes all events from the sorted set. Suppose the count is 42 likes.\n4. It renders one message, "Alice and 41 others liked your photo", and sends a single push.`,
         keyTakeaways: [
-          'Reduces notification volume by 80% while improving user engagement.',
-          'Redis ZSET provides atomic aggregation per user.'
+          'One digest replaces many notifications, so users see less noise.',
+          'Redis can read and clear the set in one atomic step (a transaction or Lua script), so concurrent likes are not lost.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Apple APNs / Google FCM Outage or Rate Limit',
-        impact: 'Third-party push vendor rejects requests with HTTP 429 or 503 errors.',
-        mitigation: 'Implement Dead-Letter Queues (DLQ) with Exponential Backoff + Jitter retries, and fallback to SMS channel for critical OTP codes after 20 seconds.'
+        bottleneck: 'Apple APNs or Google FCM outage or rate limit',
+        impact: 'The push vendor rejects requests with HTTP 429 (too many requests) or 503 (service unavailable).',
+        mitigation: 'Retry with exponential backoff plus jitter (a random delay). Send jobs that keep failing to a dead-letter queue (DLQ) for review. For critical OTP codes, fall back to SMS after 20 seconds.'
       }
     ],
     interviewQA: [
       {
         question: 'How do you prevent sending marketing push notifications in the middle of the night (User Timezone DND)?',
         hint: 'Timezone-aware scheduling.',
-        goodAnswer: 'Store the user local timezone in their profile. When a marketing campaign is scheduled for 10:00 AM, calculate the delivery UTC timestamp per user: Target_UTC = 10:00 AM - User_Timezone_Offset, and schedule the delivery job in a partitioned time-bucket queue.',
-        pitfalls: 'Blasting all global users at 10:00 AM PST simultaneously.'
+        goodAnswer: 'Store each user timezone in the profile as an IANA name such as America/New_York, not a fixed offset, so daylight saving time is handled. For a campaign set for 10:00 AM local time, compute each user delivery time in UTC (UTC = local time minus the timezone offset) and put the job in a time-bucketed queue.',
+        pitfalls: 'Sending to every user at 10:00 AM Pacific time at once.'
       }
     ],
     similarSystems: ['Braze', 'OneSignal', 'Airship', 'AWS Pinpoint'],
@@ -511,7 +516,7 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'snowflake-id-generator',
     title: 'Design a Distributed Unique ID Generator (Twitter Snowflake)',
     slug: 'distributed-id-generator',
-    tagline: 'Generating 64-bit globally unique, time-sortable, k-ordered IDs at 1,000,000 IDs/sec with zero database coordination.',
+    tagline: 'Generate unique 64-bit IDs that sort by time, at 1,000,000 IDs per second, with no coordination between servers for each ID.',
     category: 'Storage & Infrastructure',
     difficulty: 'Intermediate',
     readTime: '16 min read',
@@ -521,57 +526,57 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
       storage: '64-bit integer format (8 bytes per ID)',
       bandwidth: '8 MB/s Network Payload'
     },
-    overview: 'A distributed ID generator produces 64-bit unique identifiers across hundreds of distributed server instances. The IDs must be naturally time-sortable (k-sorted), high performance, and fit into standard 64-bit integer database primary keys (BIGINT).',
+    overview: 'A distributed ID generator creates unique 64-bit IDs on many servers at once. The IDs sort roughly by creation time (k-sorted, meaning nearly in order), and they fit in a standard 64-bit database key (BIGINT).',
     keyChallenges: [
-      'Zero Database Write Locks: Generating IDs without relying on centralized database auto-increment locks',
-      'Time-Ordered Property: IDs generated at time t2 must be numerically larger than IDs generated at t1',
-      'Clock Drift & NTP Leap Seconds: Handling server system clock moving backward without producing duplicate IDs',
-      'Worker Node ID Allocation: Assigning unique 10-bit machine IDs across autoscaling cloud container clusters'
+      'No central lock: generate IDs without a shared database counter (auto-increment) that every server must wait on.',
+      'Time order: an ID created later should be larger. This is exact within one server. Across servers, clocks differ slightly, so the order is only approximate.',
+      'Clock problems: if a server clock moves backward (for example after an NTP correction), the server must not create duplicate IDs.',
+      'Worker ID assignment: give each server a unique 10-bit worker ID, even when containers start and stop automatically.'
     ],
     functionalRequirements: [
-      'Generate 64-bit globally unique integer IDs',
-      'IDs must be roughly time-sortable by creation timestamp',
-      'Support up to 10,000 independent worker generator nodes',
-      'Generate > 1,000,000 unique IDs per second across cluster'
+      'Generate globally unique 64-bit integer IDs.',
+      'IDs sort roughly by creation time.',
+      'Support up to 1,024 worker nodes (the limit of a 10-bit worker ID).',
+      'Generate more than 1,000,000 unique IDs per second across the cluster.'
     ],
     nonFunctionalRequirements: [
-      'Sub-microsecond generation latency (< 1 microsecond in-memory)',
-      'High Availability 99.999% (zero single points of failure)',
-      'Id compactness: exactly 64 bits (fits in SQL BIGINT)'
+      'Generation takes under 1 microsecond, because it happens in memory.',
+      'Availability: 99.999%, with no single point of failure for generating IDs.',
+      'Compact: exactly 64 bits, so the ID fits in a SQL BIGINT.'
     ],
-    outOfScope: ['UUIDv4 128-bit random string formatting'],
+    outOfScope: ['128-bit random UUIDv4 strings.'],
     capacityEstimations: {
       assumptions: [
-        '10 Billion IDs created daily (~115,000 IDs/sec avg, 1M peak IDs/sec)',
-        '64-bit integer size = 8 bytes'
+        '10 billion IDs per day: about 115,000 IDs/s on average and 1M IDs/s at peak.',
+        'A 64-bit integer takes 8 bytes.'
       ],
       metrics: [
-        { label: 'Max ID Generation Rate', value: '4,096,000 IDs/ms', formula: '1,024 nodes * 4,096 sequence numbers per ms', description: 'Theoretical Snowflake limit' },
-        { label: 'Lifetime Span', value: '69.7 Years', formula: '41 bits = 2^41 milliseconds', description: 'Epoch lifespan before overflow' }
+        { label: 'Max ID Generation Rate', value: '4,194,304 IDs/ms', formula: '1,024 nodes * 4,096 sequence numbers per ms', description: 'Theoretical limit: 1,024 workers × 4,096 IDs per ms is about 4.2 million IDs per ms' },
+        { label: 'Lifetime Span', value: '69.7 Years', formula: '41 bits = 2^41 milliseconds', description: 'How long the timestamp lasts before it overflows' }
       ],
-      conclusion: 'The 64-bit Snowflake format easily satisfies decades of high-concurrency scaling.'
+      conclusion: 'The 64-bit Snowflake format is far more than this system needs. One worker can make up to 4,096 IDs per millisecond, and the timestamp lasts about 69 years from the chosen start date (epoch).'
     },
     architecture: {
-      summary: 'Snowflake structure: 1 bit sign + 41 bits millisecond timestamp + 10 bits machine/datacenter ID + 12 bits sequence number. Machine IDs are assigned via ZooKeeper/etcd leases on startup.',
+      summary: 'A Snowflake ID has 1 sign bit, a 41-bit timestamp in milliseconds, a 10-bit worker ID and a 12-bit sequence number. Each worker claims its worker ID at startup through a ZooKeeper or etcd lease.',
       nodes: [
-        { id: 'client', label: 'App Services', type: 'service', x: 10, y: 50, description: 'Calls local embedded Snowflake generator' },
-        { id: 'snowflake_node', label: 'Snowflake Worker Instance', type: 'worker', x: 45, y: 50, description: 'Bit-shifts timestamp and sequence in memory', techStack: ['Go / Rust / Java'] },
-        { id: 'zookeeper', label: 'Worker ID Coordinator', type: 'database', x: 80, y: 50, description: 'Maintains 10-bit worker ID leases (0-1023)', techStack: ['ZooKeeper / etcd'] }
+        { id: 'client', label: 'App Services', type: 'service', x: 10, y: 50, description: 'Calls the Snowflake generator that runs inside the same process' },
+        { id: 'snowflake_node', label: 'Snowflake Worker Instance', type: 'worker', x: 45, y: 50, description: 'Combines the timestamp, worker ID and sequence number in memory with bit shifts', techStack: ['Go / Rust / Java'] },
+        { id: 'zookeeper', label: 'Worker ID Coordinator', type: 'database', x: 80, y: 50, description: 'Holds leases for the 10-bit worker IDs (0 to 1023)', techStack: ['ZooKeeper / etcd'] }
       ],
       edges: [
         { id: 'e1', from: 'snowflake_node', to: 'zookeeper', label: 'Acquire Worker ID (e.g. Node 42)', protocol: 'Internal RPC' },
         { id: 'e2', from: 'client', to: 'snowflake_node', label: 'Generate ID (0.001ms)', protocol: 'Internal RPC' }
       ],
       flowSteps: [
-        { step: 1, title: 'Worker Node ID Assignment', description: 'On startup, the worker creates an ephemeral sequential node in ZooKeeper to acquire a unique 10-bit machine ID (e.g. Machine 105).', activeNodes: ['snowflake_node', 'zookeeper'], highlightDetails: 'Guarantees no two servers share the same machine ID.', latencyEstimate: '20ms (Startup only)' },
-        { step: 2, title: 'In-Memory Bitwise Generation', description: 'Application requests ID. Worker reads current Unix millisecond timestamp, increments local 12-bit sequence number (0-4095), and combines them using bitwise OR: (Timestamp << 22) | (MachineID << 12) | Sequence.', activeNodes: ['snowflake_node', 'client'], highlightDetails: 'Executes in CPU registers in under 50 nanoseconds.', latencyEstimate: '< 0.001ms' }
+        { step: 1, title: 'Claim a worker ID', description: 'At startup, the worker claims a free worker ID between 0 and 1023 through a ZooKeeper node (or an etcd lease). The node disappears if the worker dies, so the ID can be reused.', activeNodes: ['snowflake_node', 'zookeeper'], highlightDetails: 'No two live servers hold the same worker ID.', latencyEstimate: '20ms (Startup only)' },
+        { step: 2, title: 'Generate the ID in memory', description: 'The app asks for an ID. The worker reads the current time in milliseconds since a custom start date (epoch). It also uses a 12-bit sequence number (0 to 4095) that counts the IDs made in the same millisecond and restarts at 0 in a new millisecond. It builds the ID with bit operations: (Timestamp << 22) | (WorkerID << 12) | Sequence.', activeNodes: ['snowflake_node', 'client'], highlightDetails: 'This takes a few CPU operations and no network call.', latencyEstimate: '< 0.001ms' }
       ]
     },
     apiDesign: [
       {
         method: 'GET',
         path: '/api/v1/id',
-        description: 'Get next unique 64-bit Snowflake ID',
+        description: 'Get the next unique 64-bit ID',
         responseBody: '{\n  "id": "189283748291039485",\n  "timestamp": 1724000000123,\n  "machine_id": 42\n}'
       }
     ],
@@ -585,33 +590,33 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
           { name: 'pod_ip', type: 'VARCHAR(45)' },
           { name: 'lease_expires_at', type: 'TIMESTAMP' }
         ],
-        notes: 'Worker ID lease registry in etcd or PostgreSQL.'
+        notes: 'Registry of worker ID leases, kept in etcd or PostgreSQL.'
       }
     ],
     deepDives: [
       {
-        title: 'Clock Drift & Backward NTP Adjustments: The Snowflake Failure Mode',
-        subtitle: 'What happens when server clock moves backward by 10 milliseconds?',
-        content: `If a server clock is adjusted backward by NTP (Network Time Protocol), the worker might generate timestamp T which it already used 5ms ago, producing duplicate IDs!\n\nDefenses:\n1. Clock Backward Check: On every ID generation, if (current_timestamp < last_timestamp):\n   - If drift is < 5ms: Sleep/spin-wait for (last_timestamp - current_timestamp) until clock catches up.\n   - If drift is > 5ms: Refuse to generate IDs, raise an alert, or request a new Worker Machine ID from ZooKeeper to change the 10-bit machine partition immediately!`,
+        title: 'Clock drift and backward clock changes: the Snowflake failure mode',
+        subtitle: 'What happens if a server clock moves back by 10 milliseconds?',
+        content: `If NTP (Network Time Protocol) moves a server clock backward, the worker may reuse a timestamp it already used a few milliseconds ago. It can then create duplicate IDs.\n\nDefenses:\n1. On every ID, compare the current time with the last timestamp used. If the current time is earlier:\n   - If the gap is small (for example under 5 ms), wait until the clock catches up.\n   - If the gap is larger, refuse to generate IDs and raise an alert. Another option is to claim a new worker ID, so new IDs cannot collide with earlier ones.\n2. Store the last timestamp on disk or in the coordinator, so a restarted worker also refuses to issue IDs until the clock passes that value.\n3. Configure NTP to adjust the clock gradually (slewing) instead of jumping it.`,
         keyTakeaways: [
-          'Spin-wait handles minor sub-5ms clock drift seamlessly.',
-          'Never ignore negative clock drift in distributed ID generators.'
+          'Waiting out a small clock gap is simple and safe.',
+          'Never ignore a backward clock jump in an ID generator.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
         bottleneck: 'More than 4,096 IDs requested in a single millisecond on one node',
-        impact: '12-bit sequence counter overflows past 4,095.',
-        mitigation: 'When sequence hits 4,096, block and wait for the next millisecond (while timestamp <= last_timestamp { timestamp = now() }) and reset sequence to 0.'
+        impact: 'The 12-bit sequence counter overflows after 4,095.',
+        mitigation: 'When the sequence reaches 4,096, wait for the next millisecond (while timestamp <= last_timestamp { timestamp = now() }) and reset the sequence to 0.'
       }
     ],
     interviewQA: [
       {
         question: 'Why is Snowflake ID (64-bit int) superior to UUIDv4 (128-bit string) as a database primary key?',
-        hint: 'B+ Tree index fragmentation.',
-        goodAnswer: 'UUIDv4 is 128 bits (16 bytes vs 8 bytes) and completely random. Inserting random UUIDs into a B+ Tree index causes massive page splits and random disk I/O, destroying database write throughput. Snowflake IDs are 64 bits and naturally sequential, appending cleanly to the right-most B+ Tree leaf page with 0 page splits.',
-        pitfalls: 'Claiming UUIDv4 has same indexing performance as integer IDs.'
+        hint: 'B+ tree index fragmentation.',
+        goodAnswer: 'A UUIDv4 is 128 bits (16 bytes, double the 8 bytes of a Snowflake ID) and fully random. Random inserts land on random pages of a B+ tree index, which causes many page splits and random disk I/O, and this slows writes. Snowflake IDs are 64 bits and mostly increasing, so new rows go to the right-most leaf page. That page still splits when it fills, but far less often, and writes stay sequential. Time-ordered UUIDs such as UUIDv7 give the same benefit at 128 bits.',
+        pitfalls: 'Claiming UUIDv4 has the same indexing performance as integer IDs.'
       }
     ],
     similarSystems: ['Sonyflake', 'Instagram ID Generator', 'UUIDv7', 'Segment KSUID'],
@@ -621,7 +626,7 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'webhook-delivery-system',
     title: 'Design a Distributed Webhook Delivery & Dispatch Service',
     slug: 'webhook-delivery-platform',
-    tagline: 'Reliable event delivery to external HTTP endpoints, exponential backoff retries, dead-letter queues, and HMAC signature verification.',
+    tagline: 'Deliver events to customer HTTP endpoints reliably, with retries, a dead-letter queue and signed payloads.',
     category: 'Storage & Infrastructure',
     difficulty: 'Intermediate',
     readTime: '20 min read',
@@ -629,49 +634,50 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
       dau: '500 Million Webhook Events / day',
       qps: '25,000 Deliveries/sec peak throughput',
       storage: '5 TB / month delivery attempt logs in ClickHouse',
-      bandwidth: '5 GB/s HTTP Egress'
+      bandwidth: '50 MB/s Peak HTTP Egress'
     },
-    overview: 'A webhook delivery engine reliably transmits event notifications (e.g. payment.succeeded, order.created) over public HTTPS POST requests to customer-provided endpoint URLs. The system handles slow customer servers, exponential retries, and cryptographic HMAC signing.',
+    overview: 'A webhook delivery service sends event notifications (such as payment.succeeded or order.created) as HTTPS POST requests to URLs that customers provide. It copes with slow or failing customer servers, retries with exponential backoff (growing delays), and signs each request with an HMAC so the receiver can verify it.',
     keyChallenges: [
-      'Unreliable External Endpoints: 20% of customer webhook servers timeout or return 500 errors',
-      'Preventing Worker Thread Exhaustion: A customer endpoint taking 30 seconds to respond must not freeze the worker queue',
-      'Exponential Backoff Scheduling: Retrying failed webhooks over 72 hours (after 1m, 5m, 30m, 2h, 12h, 24h)',
-      'Security: Cryptographically signing payloads using HMAC-SHA256 and defending against Server-Side Request Forgery (SSRF)'
+      'Unreliable endpoints: customer servers are often slow, down or returning errors, so failure is normal.',
+      'Worker exhaustion: a customer endpoint that takes 30 seconds to answer must not tie up workers and block other deliveries.',
+      'Retry schedule: retry failed deliveries for up to 72 hours with growing gaps (for example 1 minute, 5 minutes, 30 minutes, 2 hours, 12 hours, then daily).',
+      'Security: sign payloads with HMAC-SHA256 and defend against SSRF (server-side request forgery, where an attacker makes your server call internal addresses).'
     ],
     functionalRequirements: [
-      'Register webhook URLs with event topic subscriptions',
-      'Sign every outgoing HTTP payload with HMAC-SHA256 header (Stripe-Signature)',
-      'Automatic retry policy with exponential backoff for up to 72 hours',
-      'Dead Letter Queue (DLQ) and customer alert when webhook permanently fails',
-      'Customer dashboard with delivery attempt logs and manual redrive button'
+      'Register webhook URLs and subscribe them to event types.',
+      'Sign every request with an HMAC-SHA256 signature in a header (Stripe uses Stripe-Signature).',
+      'Retry failed deliveries with exponential backoff for up to 72 hours.',
+      'Move permanently failing deliveries to a dead-letter queue (DLQ) and alert the customer.',
+      'Give customers a dashboard with delivery attempt logs and a button to resend an event.'
     ],
     nonFunctionalRequirements: [
-      'At-Least-Once Delivery guarantee',
-      'Initial delivery attempt within 500ms of event trigger',
-      'SSRF Protection: Block internal IP ranges (127.0.0.1, 169.254.169.254, 10.0.0.0/8)',
-      'High Availability 99.99%'
+      'At-least-once delivery: an event may arrive more than once, so each event carries a unique ID that receivers can use to ignore duplicates.',
+      'First delivery attempt within 500 ms of the event.',
+      'SSRF protection: block internal IP ranges (127.0.0.1, 169.254.169.254, 10.0.0.0/8).',
+      'Availability: 99.99%.'
     ],
-    outOfScope: ['Bilateral bidirectional WebSocket tunnels'],
+    outOfScope: ['Two-way WebSocket tunnels.'],
     capacityEstimations: {
       assumptions: [
-        '500M webhook events/day (~5,800 events/sec avg, 25,000 peak QPS)',
-        'Average HTTP response time of external customer servers: 800ms'
+        '500M webhook events per day: about 5,800/s on average and 25,000/s at peak.',
+        'Customer servers take 800 ms on average to respond.',
+        'An average payload is about 2 KB of JSON: 25,000 × 2 KB = 50 MB/s of peak egress.'
       ],
       metrics: [
-        { label: 'Dispatch QPS', value: '25,000 / sec', formula: 'Peak outgoing HTTP POST requests', description: 'Async HTTP Dispatch Fleet' },
-        { label: 'Concurrent HTTP Sockets', value: '20,000 Sockets', formula: '25,000 QPS * 0.8s response time', description: 'Non-blocking I/O Event Loop' }
+        { label: 'Dispatch QPS', value: '25,000 / sec', formula: 'Peak outgoing HTTP POST requests', description: 'Outgoing HTTP POST requests at peak' },
+        { label: 'Concurrent HTTP Sockets', value: '20,000 Sockets', formula: '25,000 QPS * 0.8s response time', description: 'Open connections held by non-blocking I/O' }
       ],
-      conclusion: 'Async Non-Blocking I/O (Go / Node.js / Rust Tokio) is mandatory to hold 20k open sockets.'
+      conclusion: 'The fleet must hold about 20,000 open connections at once, so use non-blocking I/O (Go, Node.js or Rust with Tokio). The 5-second timeout limits how long a slow endpoint can hold a connection.'
     },
     architecture: {
-      summary: 'Internal Service emits event -> Webhook Dispatcher enqueues to Kafka -> Dispatch Worker validates URL against SSRF filter, generates HMAC signature, and sends HTTP POST. If failed, schedules into Delayed Retry Queue.',
+      summary: 'An internal service emits an event and the dispatcher queues it in Kafka. A dispatch worker checks the destination URL against the SSRF filter, signs the payload with HMAC, and sends the HTTP POST. If delivery fails, the event goes to a delayed retry queue.',
       nodes: [
         { id: 'service', label: 'Internal Business Service', type: 'service', x: 8, y: 50, description: 'Publishes payment or order events' },
         { id: 'kafka_events', label: 'Webhook Event Topic', type: 'queue', x: 30, y: 50, description: 'Buffers new outgoing events', techStack: ['Kafka'] },
-        { id: 'dispatcher', label: 'Async HTTP Dispatch Workers', type: 'worker', x: 55, y: 50, description: 'Executes non-blocking HTTPS POSTs with HMAC', techStack: ['Go / Rust Tokio'] },
-        { id: 'customer_server', label: 'Customer Webhook Server', type: 'client', x: 85, y: 50, description: 'Receives POST /webhook payload' },
-        { id: 'delayed_queue', label: 'Delayed Retry Queue', type: 'queue', x: 55, y: 80, description: 'Schedules exponential backoff retries', techStack: ['Kafka Delayed / RabbitMQ DLX'] },
-        { id: 'log_db', label: 'Delivery Log Store (ClickHouse)', type: 'database', x: 55, y: 20, description: 'Stores status codes, latency, response body', techStack: ['ClickHouse'] }
+        { id: 'dispatcher', label: 'Async HTTP Dispatch Workers', type: 'worker', x: 55, y: 50, description: 'Send HTTPS POSTs with non-blocking I/O and add the HMAC signature', techStack: ['Go / Rust Tokio'] },
+        { id: 'customer_server', label: 'Customer Webhook Server', type: 'client', x: 85, y: 50, description: 'Receives the POST /webhook request' },
+        { id: 'delayed_queue', label: 'Delayed Retry Queue', type: 'queue', x: 55, y: 80, description: 'Holds failed events until their next retry time (exponential backoff)', techStack: ['Kafka Delayed / RabbitMQ DLX'] },
+        { id: 'log_db', label: 'Delivery Log Store (ClickHouse)', type: 'database', x: 55, y: 20, description: 'Stores status codes, latency and response bodies for each attempt', techStack: ['ClickHouse'] }
       ],
       edges: [
         { id: 'e1', from: 'service', to: 'kafka_events', label: '1. Publish Event', protocol: 'Async Queue', isAsync: true },
@@ -681,16 +687,16 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         { id: 'e5', from: 'dispatcher', to: 'delayed_queue', label: '5. If Failed: Schedule Retry', protocol: 'Async Queue', isAsync: true }
       ],
       flowSteps: [
-        { step: 1, title: 'Event Ingestion & HMAC Signing', description: 'Worker receives event, looks up customer shared webhook secret, and calculates HMAC-SHA256 signature over timestamp + JSON payload.', activeNodes: ['kafka_events', 'dispatcher'], highlightDetails: 'Injected into Stripe-Signature header to prevent spoofing.', latencyEstimate: '1ms' },
-        { step: 2, title: 'SSRF Shielding & DNS Validation', description: 'Worker resolves customer hostname. If IP falls in private RFC 1918 ranges (10.0.0.0/8, 127.0.0.1, 169.254.169.254 cloud metadata), request is rejected immediately.', activeNodes: ['dispatcher'], highlightDetails: 'Prevents malicious users from probing internal infrastructure.', latencyEstimate: '5ms' },
-        { step: 3, title: 'Non-Blocking HTTP POST & Retry Scheduling', description: 'Worker dispatches HTTP POST with a 5-second timeout. If customer server returns 500 error or times out, worker pushes payload to Delayed Retry Queue for retry in 5 minutes.', activeNodes: ['dispatcher', 'customer_server', 'delayed_queue', 'log_db'], highlightDetails: 'Retries repeat with exponential backoff up to 72 hours.', latencyEstimate: '800ms' }
+        { step: 1, title: 'Receive the event and sign it', description: 'The worker takes the event, looks up the customer shared webhook secret, and computes an HMAC-SHA256 signature over the timestamp and the JSON payload.', activeNodes: ['kafka_events', 'dispatcher'], highlightDetails: 'The signature goes in a header, so the receiver can check that the sender is genuine.', latencyEstimate: '1ms' },
+        { step: 2, title: 'Check the URL for SSRF', description: 'The worker resolves the customer hostname. If the IP is in a private or internal range (10.0.0.0/8, 127.0.0.1, or 169.254.169.254, the cloud metadata address), the request is rejected at once.', activeNodes: ['dispatcher'], highlightDetails: 'This stops attackers from using your servers to probe your internal network.', latencyEstimate: '5ms' },
+        { step: 3, title: 'Send the POST and schedule retries', description: 'The worker sends the HTTP POST with a 5-second timeout. If the customer server returns a 5xx error or times out, the worker puts the event in the delayed retry queue, with a short first delay (for example 1 minute).', activeNodes: ['dispatcher', 'customer_server', 'delayed_queue', 'log_db'], highlightDetails: 'Each retry waits longer than the last, up to 72 hours in total.', latencyEstimate: '800ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/v1/webhook_endpoints',
-        description: 'Register a new webhook listener URL',
+        description: 'Register a new webhook URL',
         requestBody: '{\n  "url": "https://api.mycompany.com/webhooks/stripe",\n  "enabled_events": ["charge.succeeded", "charge.failed"]\n}',
         responseBody: '{\n  "id": "we_102938",\n  "secret": "whsec_98a7b6c5..."\n}'
       }
@@ -707,33 +713,33 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
           { name: 'execution_time_ms', type: 'INT' },
           { name: 'created_at', type: 'TIMESTAMP' }
         ],
-        notes: 'Stored in ClickHouse for real-time customer debugging analytics.'
+        notes: 'Stored in ClickHouse so customers can inspect delivery attempts quickly.'
       }
     ],
     deepDives: [
       {
-        title: 'SSRF (Server-Side Request Forgery) Defense in Webhook Engines',
-        subtitle: 'How attackers use webhook URLs to steal AWS IAM credentials and how to stop them',
-        content: `A malicious user creates an account and sets their webhook URL to http://169.254.169.254/latest/meta-data/iam/security-credentials/. When a webhook fires, your internal worker fetches AWS metadata and sends your company root AWS keys straight to the attacker!\n\nZero-Trust SSRF Defense Pipeline:\n1. DNS Resolution Check: Resolve hostname to IP before making the socket connection.\n2. IP Range Blacklist: Reject any IP in:\n   - 127.0.0.0/8 (Loopback)\n   - 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 (Private subnets)\n   - 169.254.169.254 (Cloud link-local metadata service)\n   - 0.0.0.0/8 and IPv6 equivalents.\n3. Prevent DNS Rebinding: Pin the resolved IP address on the HTTP client socket so malicious DNS servers cannot return a public IP first and a private IP second!`,
+        title: 'SSRF (server-side request forgery) defense in webhook systems',
+        subtitle: 'How an attacker can use a webhook URL to reach cloud credentials, and how to stop it',
+        content: `A malicious user signs up and sets their webhook URL to http://169.254.169.254/latest/meta-data/iam/security-credentials/. When an event fires, your worker fetches the cloud metadata service and may send the temporary credentials of its own IAM role back to the attacker. Newer metadata versions such as AWS IMDSv2 make this harder, but you should not rely on them alone.\n\nDefense pipeline:\n1. Resolve the hostname to an IP address before opening the connection.\n2. Reject any IP in these ranges:\n   - 127.0.0.0/8 (loopback)\n   - 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 (private networks)\n   - 169.254.0.0/16 (link-local, including the cloud metadata service at 169.254.169.254)\n   - 0.0.0.0/8, and the IPv6 equivalents.\n3. Stop DNS rebinding: connect to the IP you just checked (pin it on the socket). Otherwise a malicious DNS server could return a public IP for the check and a private IP for the real connection.\n4. Do not follow HTTP redirects automatically. A public URL can redirect to an internal address, so check each redirect target the same way.`,
         keyTakeaways: [
-          'Socket IP pinning prevents DNS rebinding exploits.',
-          'Never execute HTTP requests to customer-provided URLs without strict IP validation.'
+          'Pinning the checked IP on the socket prevents DNS rebinding.',
+          'Never send requests to customer-supplied URLs without strict IP checks.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Single Customer Endpoint Outage Backlog',
-        impact: 'A large customer server goes down, flooding retry queues with 10M failed tasks and delaying other customers webhooks.',
-        mitigation: 'Per-Tenant Queue Isolation: Isolate retry queues per customer ID so 1 failing customer never affects delivery to other tenants.'
+        bottleneck: 'One failing customer endpoint creates a retry backlog',
+        impact: 'A large customer server goes down and floods the retry queues with a huge number of failed events, which delays webhooks for other customers.',
+        mitigation: 'Isolate retry queues per customer (per tenant), so one failing customer cannot slow down others. Also pause delivery to an endpoint that keeps failing (a circuit breaker) and resume it with a test request.'
       }
     ],
     interviewQA: [
       {
         question: 'Why must webhooks include a timestamp in the signature header?',
         hint: 'Replay attacks.',
-        goodAnswer: 'Including timestamp t in the signature (t=1724000000,v1=hash(t + "." + payload)) allows recipient servers to reject any webhook older than 5 minutes, completely preventing malicious attackers from capturing and replaying old payment confirmation webhooks.',
-        pitfalls: 'Signing only the payload body without timestamp.'
+        goodAnswer: 'Put the timestamp t in the signed data (for example t=1724000000,v1=HMAC(t + "." + payload)). The receiver rejects any webhook whose timestamp is older than a few minutes (for example 5), so an attacker cannot replay a captured request later. Inside that window, the receiver should also remember event IDs to catch repeats.',
+        pitfalls: 'Signing only the payload body, without the timestamp.'
       }
     ],
     similarSystems: ['Stripe Webhooks', 'Svix', 'GitHub Webhooks', 'Hookdeck'],
@@ -743,57 +749,58 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'realtime-metrics-monitoring',
     title: 'Design a Real-Time Distributed Metrics & Monitoring System (Prometheus / Datadog)',
     slug: 'metrics-monitoring-platform',
-    tagline: 'High-throughput time-series ingestion, Gorilla time-series compression, PromQL aggregation, and sub-second anomaly alerting.',
+    tagline: 'Collect millions of metric points per second, compress them with Gorilla encoding, query them with PromQL, and evaluate alert rules.',
     category: 'Search & Big Data',
     difficulty: 'Advanced',
     readTime: '24 min read',
     scaleSummary: {
       dau: '100,000 Monitored Servers & Services',
       qps: '10,000,000 Metric Data Points / sec',
-      storage: '50 TB / day Time-Series Data',
-      bandwidth: '20 GB/s Telemetry Stream'
+      storage: '1.18 TB / day compressed Time-Series Data (13.8 TB raw)',
+      bandwidth: '160 MB/s Raw Telemetry Stream'
     },
-    overview: 'A distributed observability platform ingests millions of counter, gauge, and histogram metric data points per second from servers and containers. The system compresses timeseries data using Gorilla delta-of-delta encoding, executes PromQL queries, and evaluates real-time alert rules.',
+    overview: 'A monitoring platform collects millions of metric points per second (counters, gauges and histograms) from servers and containers. It compresses the time series with Gorilla delta-of-delta encoding, answers PromQL queries, and checks alert rules on a schedule.',
     keyChallenges: [
-      'Extreme Ingestion Throughput: Ingesting 10 Million metrics/sec without disk I/O bottlenecks',
-      'High Cardinality Explosion: Millions of unique label combinations (e.g. {service="api", pod="pod-99", user_id="123"}) ballooning memory',
-      'Time-Series Compression: Compressing 16-byte (timestamp, float64 value) points down to ~1.37 bytes using Facebook Gorilla algorithm',
-      'Sub-Second Alerting: Evaluating 50,000 alert rules every 15 seconds across sliding windows'
+      'Ingestion: accept 10 million points per second without disk I/O becoming the bottleneck.',
+      'High cardinality: every unique label combination (for example {service="api", pod="pod-99", user_id="123"}) is a separate time series. Millions of them can use up memory.',
+      'Compression: shrink each 16-byte point (timestamp plus float64 value) to about 1.37 bytes, the average reported in the Facebook Gorilla paper.',
+      'Alert evaluation: check 50,000 alert rules every 15 seconds over windows of recent data.'
     ],
     functionalRequirements: [
-      'Ingest multi-dimensional metrics (metric_name, labels, timestamp, value)',
-      'Query timeseries data using PromQL (Rate, Sum, Histogram Quantile P99)',
-      'Configurable retention policies (Raw: 14 days, 1-min rollup: 90 days, 1-hour rollup: 1 year)',
-      'Alerting engine evaluating PromQL rules and notifying PagerDuty/Slack'
+      'Ingest multi-dimensional metrics (metric name, labels, timestamp, value).',
+      'Query time series with PromQL (rate, sum, P99 histogram quantile).',
+      'Configurable retention: raw data 14 days, 1-minute rollups 90 days, 1-hour rollups 1 year.',
+      'Evaluate alert rules written in PromQL and notify PagerDuty or Slack.'
     ],
     nonFunctionalRequirements: [
-      'Query latency < 500ms for 7-day dashboard charts',
-      'High Compression: > 10x compression factor on disk and RAM',
-      'High Availability 99.99%'
+      'Query latency under 500 ms for a 7-day dashboard chart.',
+      'Compression of more than 10x on disk and in memory.',
+      'Availability: 99.99%.'
     ],
-    outOfScope: ['Distributed APM distributed tracing spans (OpenTelemetry Jaeger)'],
+    outOfScope: ['Distributed tracing spans (OpenTelemetry, Jaeger).'],
     capacityEstimations: {
       assumptions: [
-        '10M metric points ingested per second',
-        'Raw point: Timestamp (8 bytes) + Float64 (8 bytes) = 16 bytes',
-        'Uncompressed Ingestion = 10M * 16 bytes = 160 MB/sec = 13.8 TB/day',
-        'With Gorilla Compression (1.37 bytes/point): Storage drops to 1.18 TB/day!'
+        '10M metric points are ingested per second.',
+        'A raw point is a timestamp (8 bytes) plus a float64 value (8 bytes) = 16 bytes.',
+        'Uncompressed: 10M × 16 bytes = 160 MB/s = 13.8 TB/day.',
+        'With Gorilla compression (1.37 bytes per point), storage drops to 1.18 TB/day.',
+        'Storage figures are for one copy, before replication.'
       ],
       metrics: [
-        { label: 'Ingestion Throughput', value: '10,000,000 points/s', formula: 'Peak telemetry stream', description: 'Kafka + ClickHouse TSDB' },
-        { label: 'Gorilla Compression Ratio', value: '11.6x Compression', formula: '16 bytes -> 1.37 bytes per point', description: 'Delta-of-Delta + XOR encoding' }
+        { label: 'Ingestion Throughput', value: '10,000,000 points/s', formula: 'Peak telemetry stream', description: 'Points per second through Kafka into the time-series store' },
+        { label: 'Gorilla Compression Ratio', value: '11.6x Compression', formula: '16 bytes -> 1.37 bytes per point', description: 'Delta-of-delta for timestamps and XOR for values' }
       ],
-      conclusion: 'Time-series specialized storage engines (ClickHouse / Prometheus TSDB / VictoriaMetrics) are mandatory.'
+      conclusion: 'Use a storage engine built for time series (ClickHouse, Prometheus TSDB or VictoriaMetrics). A general-purpose database would struggle with this write rate and would not compress the data as well.'
     },
     architecture: {
-      summary: 'Prometheus Agents scrape endpoints -> Push metrics to Kafka -> Flink aggregates high-cardinality rollups -> Ingested into ClickHouse / TSDB with Gorilla compression -> Query Service evaluates PromQL -> Alertmanager fires alerts.',
+      summary: 'Agents scrape metric endpoints and push the points to Kafka. Flink computes rollups and downsampled data. A time-series database (ClickHouse, Prometheus TSDB or VictoriaMetrics) stores the points with Gorilla-style compression. The query service evaluates PromQL, and the alert evaluator checks rules and sends alerts through Alertmanager.',
       nodes: [
-        { id: 'agents', label: 'Metric Exporters / Agents', type: 'worker', x: 8, y: 50, description: 'Scrapes /metrics on 100k servers' },
-        { id: 'kafka', label: 'Metrics Ingestion Stream', type: 'queue', x: 30, y: 50, description: 'Buffers 10M points/sec', techStack: ['Kafka'] },
-        { id: 'flink', label: 'Stream Aggregator (Flink)', type: 'worker', x: 55, y: 30, description: 'Calculates 1-minute rollups & downsampling', techStack: ['Apache Flink'] },
+        { id: 'agents', label: 'Metric Exporters / Agents', type: 'worker', x: 8, y: 50, description: 'Scrapes the /metrics endpoint on about 100,000 servers' },
+        { id: 'kafka', label: 'Metrics Ingestion Stream', type: 'queue', x: 30, y: 50, description: 'Buffers the 10M points per second', techStack: ['Kafka'] },
+        { id: 'flink', label: 'Stream Aggregator (Flink)', type: 'worker', x: 55, y: 30, description: 'Computes 1-minute rollups and downsampled data', techStack: ['Apache Flink'] },
         { id: 'tsdb', label: 'Time-Series Store (ClickHouse / TSDB)', type: 'database', x: 75, y: 50, description: 'Stores Gorilla-compressed column blocks', techStack: ['ClickHouse / VictoriaMetrics'] },
-        { id: 'query_srv', label: 'PromQL Query Engine', type: 'service', x: 92, y: 30, description: 'Evaluates Grafana dashboard queries', techStack: ['Go PromQL Engine'] },
-        { id: 'alertmanager', label: 'Alert Evaluator', type: 'service', x: 92, y: 70, description: 'Fires PagerDuty & Slack alerts', techStack: ['Alertmanager'] }
+        { id: 'query_srv', label: 'PromQL Query Engine', type: 'service', x: 92, y: 30, description: 'Runs the queries behind Grafana dashboards', techStack: ['Go PromQL Engine'] },
+        { id: 'alertmanager', label: 'Alert Evaluator', type: 'service', x: 92, y: 70, description: 'Sends alerts to PagerDuty and Slack', techStack: ['Alertmanager'] }
       ],
       edges: [
         { id: 'e1', from: 'agents', to: 'kafka', label: '1. Push Metrics (gRPC)', protocol: 'gRPC' },
@@ -803,16 +810,16 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         { id: 'e5', from: 'alertmanager', to: 'tsdb', label: '5. Poll Alert Rules (15s)', protocol: 'SQL' }
       ],
       flowSteps: [
-        { step: 1, title: 'High-Throughput Push Ingestion', description: 'Agents push metric vectors to Kafka. Kafka partitions distribute write load evenly across 50 broker nodes.', activeNodes: ['agents', 'kafka'], highlightDetails: 'Zero write lock contention.', latencyEstimate: '2ms' },
-        { step: 2, title: 'Gorilla Delta-of-Delta Compression', description: 'TSDB batches points into 2-hour chunks. Timestamps are compressed using Delta-of-Delta (most deltas = 0, storing 1 bit). Values are compressed using XOR floating point encoding.', activeNodes: ['tsdb'], highlightDetails: 'Reduces 16 bytes down to 1.37 bytes (91% RAM savings).', latencyEstimate: '10ms' },
-        { step: 3, title: 'Sub-Second PromQL Querying', description: 'User loads Grafana dashboard. Query engine scans columnar TSDB blocks in parallel, evaluating rate(http_requests_total[5m]) in < 150ms.', activeNodes: ['query_srv', 'tsdb'], highlightDetails: 'Columnar memory format allows scanning 100M rows/sec per CPU core.', latencyEstimate: '120ms' }
+        { step: 1, title: 'High-throughput push ingestion', description: 'Agents push batches of metric points to Kafka. Kafka partitions spread the write load across many brokers.', activeNodes: ['agents', 'kafka'], highlightDetails: 'Partitions let many producers write in parallel.', latencyEstimate: '2ms' },
+        { step: 2, title: 'Gorilla delta-of-delta compression', description: 'The time-series store groups points into 2-hour blocks. It stores timestamps as a delta of deltas (for regular scrapes the delta of deltas is 0, which takes 1 bit). It stores values with XOR floating-point encoding.', activeNodes: ['tsdb'], highlightDetails: 'A 16-byte point shrinks to about 1.37 bytes on average (about 91% smaller).', latencyEstimate: '10ms' },
+        { step: 3, title: 'PromQL querying', description: 'A user opens a Grafana dashboard. The query engine scans the columnar blocks in parallel and evaluates rate(http_requests_total[5m]).', activeNodes: ['query_srv', 'tsdb'], highlightDetails: 'Columnar storage lets the engine read only the columns and time ranges the query needs.', latencyEstimate: '120ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/api/v1/query_range',
-        description: 'Query PromQL timeseries over a time range',
+        description: 'Query a time series over a time range with PromQL',
         requestBody: '{\n  "query": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (service)",\n  "start": 1724000000,\n  "end": 1724003600,\n  "step": "15s"\n}'
       }
     ],
@@ -827,33 +834,33 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
           { name: 'value', type: 'FLOAT64' },
           { name: 'labels', type: 'MAP(String, String)' }
         ],
-        notes: 'ClickHouse table with MergeTree engine partitioned by toYYYYMM(date).'
+        notes: 'ClickHouse MergeTree table, partitioned by month in this example (toYYYYMM(date)). At this ingest rate, daily partitions would also work and make dropping old data cheaper.'
       }
     ],
     deepDives: [
       {
-        title: 'Gorilla Time-Series Compression Algorithm Deep Dive',
-        subtitle: 'The Facebook paper that revolutionized modern monitoring systems',
-        content: `Two-Part Compression Algorithm:\n1. Timestamp Compression (Delta-of-Delta):\n   - Metrics arrive at fixed intervals (e.g. every 15s). The delta between timestamps is constant: D = t_n - t_{n-1} = 15.\n   - Delta of Delta = D_n - D_{n-1} = 15 - 15 = 0.\n   - If delta-of-delta is 0, store a SINGLE BIT '0'!\n\n2. Value Compression (XOR Floating Point):\n   - Most metrics change very little between consecutive scrapes (e.g. CPU 42.1% -> 42.2%).\n   - XOR current float64 with previous float64: V_xor = V_n XOR V_{n-1}.\n   - If values are identical, V_xor = 0 (store single bit '0').\n   - If values are close, V_xor has many leading and trailing zero bits. Store only the meaningful bits with a length prefix.\n\nResult: 16-byte raw data point compresses to an average of 1.37 bytes (11.6x compression ratio)!`,
+        title: 'Gorilla time-series compression',
+        subtitle: 'The Facebook technique that many time-series databases use or adapt',
+        content: `Gorilla uses two techniques:\n1. Timestamps (delta-of-delta):\n   - Metrics usually arrive at a fixed interval (for example every 15 s). The gap between timestamps is constant: D = t_n - t_(n-1) = 15.\n   - The delta of deltas is D_n - D_(n-1) = 15 - 15 = 0.\n   - When it is 0, store a single bit, '0'.\n\n2. Values (XOR of floats):\n   - Most metrics change little between scrapes (for example CPU 42.1% to 42.2%).\n   - XOR the current float64 with the previous one: V_xor = V_n XOR V_(n-1).\n   - If the values are identical, V_xor = 0, and a single bit '0' is stored.\n   - If the values are close, V_xor has many leading and trailing zero bits. Store only the meaningful middle bits, with a short length prefix.\n\nResult: on Facebook data, a 16-byte point took an average of 1.37 bytes, a reduction of more than 11x.`,
         keyTakeaways: [
-          'Delta-of-Delta timestamp compression turns 8 bytes into 1 bit for regular scrapes.',
-          'XOR compression exploits floating point mantissa bit redundancy.'
+          'For regular scrapes, delta-of-delta turns an 8-byte timestamp into about 1 bit.',
+          'XOR encoding works because consecutive values often share most of their bits.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'High Cardinality Explosion (e.g. putting user_id in metric label)',
-        impact: 'Millions of unique timeseries streams overwhelm the inverted index in memory, causing OOM crashes.',
-        mitigation: 'Implement Cardinality Protections: Reject metrics with > 10,000 unique label series and downsample raw metrics via Apache Flink.'
+        bottleneck: 'High cardinality (for example, user_id used as a metric label)',
+        impact: 'Millions of unique time series overwhelm the in-memory index and can crash the server with out-of-memory (OOM) errors.',
+        mitigation: 'Limit the number of series per metric (for example 10,000) and reject new series above the limit. Keep unbounded values such as user_id out of labels. Flink rollups reduce storage over time, but they do not reduce the number of series, so the limit is what protects memory.'
       }
     ],
     interviewQA: [
       {
         question: 'Pull (Prometheus) vs Push (Datadog/StatsD) architecture: which is better?',
         hint: 'Service discovery vs firewall traversal.',
-        goodAnswer: 'Pull (Prometheus scrapes /metrics): Central server controls scrape rate and easily detects dead nodes (if scrape fails, node is down). Best for static/Kubernetes infra. Push (Agents send to gateway): Better for ephemeral serverless functions (AWS Lambda) and multi-cloud firewalls where central server cannot initiate inbound connections.',
-        pitfalls: 'Declaring one paradigm as universally superior without trade-off context.'
+        goodAnswer: 'Pull (Prometheus scrapes /metrics): the central server controls the scrape rate, and it sees a dead node at once because the scrape fails. It works well for static infrastructure and Kubernetes, where service discovery finds the targets. Push (agents send to a gateway): it suits short-lived jobs such as AWS Lambda functions and networks where the central server cannot open connections to the targets.',
+        pitfalls: 'Calling one model better in every case without discussing the trade-offs.'
       }
     ],
     similarSystems: ['Prometheus', 'Datadog', 'VictoriaMetrics', 'Grafana Mimir', 'InfluxDB'],
@@ -863,7 +870,7 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'proximity-service-yelp',
     title: 'Design a Proximity Service / Yelp (Nearby Places Search)',
     slug: 'proximity-service-yelp',
-    tagline: 'High-speed spatial point-of-interest lookups, Geohash grid partitioning, QuadTrees, and Google Places search ranking.',
+    tagline: 'Find nearby places fast, using geohash grid cells, spatial indexes, and ranking by distance and rating.',
     category: 'Search & Big Data',
     difficulty: 'Intermediate',
     readTime: '20 min read',
@@ -873,44 +880,44 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
       storage: '200 GB spatial database index',
       bandwidth: '5 GB/s Search Egress'
     },
-    overview: 'A proximity service enables users to discover nearby restaurants, coffee shops, and businesses within a given radius (e.g. 5km) based on GPS coordinates. The system requires spatial indexing with sub-20ms search latencies.',
+    overview: 'A proximity service lets users find nearby restaurants, cafes and other businesses within a radius (for example 5 km) of a GPS location. It needs a spatial index so a search takes under 25 ms.',
     keyChallenges: [
-      'Fast 2D Spatial Search: Finding points within radius R of (latitude, longitude) without scanning all 100M places',
-      'Handling Variable Density: Downtown Manhattan has 10,000 businesses per km², while rural Alaska has 1 business per 100 km²',
-      'Search Ranking combining distance, star rating, price tier, and open hours',
-      'Read-Heavy Workload (1000:1 read to write ratio; business locations change rarely)'
+      'Fast 2D search: find points within radius R of a (latitude, longitude) without scanning all 100M places.',
+      'Uneven density: a dense city center can have thousands of businesses per km², while a rural area has almost none.',
+      'Ranking: combine distance, star rating, price level and opening hours.',
+      'Read-heavy load: reads far outnumber writes, because business locations change rarely.'
     ],
     functionalRequirements: [
-      'Search places by location (lat, lng), radius (e.g. 3km), and category (Italian food)',
-      'Add and edit business profiles (photos, hours, address, phone)',
-      'Filter results by rating, price level, and currently open status'
+      'Search places by location (lat, lng), radius (for example 3 km) and category (for example Italian food).',
+      'Add and edit business profiles (photos, hours, address, phone).',
+      'Filter results by rating, price level and whether the place is open now.'
     ],
     nonFunctionalRequirements: [
-      'Search query latency < 25ms (P99)',
-      'High Availability 99.99%',
-      'Support 30,000 search QPS globally'
+      'Search latency under 25 ms at P99.',
+      'Availability: 99.99%.',
+      'Support 30,000 search queries per second worldwide.'
     ],
-    outOfScope: ['Live turn-by-turn navigation audio routing'],
+    outOfScope: ['Turn-by-turn navigation.'],
     capacityEstimations: {
       assumptions: [
-        '100 Million business places globally; 100M search queries per day (~1,160 QPS avg, 30,000 peak QPS)',
-        'Place record size: 2 KB (ID, name, lat, lng, category, rating, metadata)',
-        'Total Storage: 100M * 2 KB = 200 GB'
+        '100M business places worldwide; 100M searches per day: about 1,160 QPS on average and 30,000 QPS at peak.',
+        'A place record is 2 KB (ID, name, lat, lng, category, rating, metadata).',
+        'Storage: 100M × 2 KB = 200 GB.'
       ],
       metrics: [
-        { label: 'Spatial Search QPS', value: '30,000 QPS', formula: 'Peak nearby place queries', description: 'Redis Geohash / PostGIS' },
-        { label: 'Total Places Storage', value: '200 GB', formula: '100M businesses * 2 KB', description: 'Easily fits in server RAM!' }
+        { label: 'Spatial Search QPS', value: '30,000 QPS', formula: 'Peak nearby place queries', description: 'Redis geospatial index or PostGIS' },
+        { label: 'Total Places Storage', value: '200 GB', formula: '100M businesses * 2 KB', description: 'Fits in the memory of a small cluster, before replication and overhead' }
       ],
-      conclusion: 'The entire 200GB global business database can be cached in RAM across a Redis cluster.'
+      conclusion: 'About 200 GB of place data fits in the memory of a small Redis cluster, so reads can come from RAM. Plan for extra memory for indexes and replicas. Split the index into many keys (for example one per geohash prefix), because a single Redis key lives on a single node.'
     },
     architecture: {
-      summary: 'Clients query API Gateway -> Proximity Search Service -> Queries Redis Geohash Spatial Index (or PostGIS) -> Fetches business metadata from PostgreSQL -> Caches hot search tiles in CDN.',
+      summary: 'The client calls the API gateway, which forwards the query to the proximity search service. The service looks up candidate place IDs in a Redis geohash index (or PostGIS), loads business details from PostgreSQL, ranks the results, and returns the top ones. Results for popular areas can be cached (for example at a CDN).',
       nodes: [
-        { id: 'client', label: 'Yelp Mobile / Web App', type: 'client', x: 8, y: 50, description: 'Searches nearby restaurants' },
-        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 30, y: 50, description: 'Auth, rate limit, geo-routing', techStack: ['Envoy'] },
-        { id: 'search_srv', label: 'Proximity Search Service', type: 'service', x: 55, y: 50, description: 'Calculates Geohash boxes and filters results', techStack: ['Go / Java'] },
-        { id: 'geo_cache', label: 'Geohash Spatial Index (Redis)', type: 'cache', x: 80, y: 25, description: 'Stores geohash:prefix -> [place_ids]', techStack: ['Redis Geospatial'] },
-        { id: 'db', label: 'Places DB (PostgreSQL + PostGIS)', type: 'database', x: 80, y: 75, description: 'Durable place metadata with R-Tree spatial index', techStack: ['PostgreSQL + PostGIS'] }
+        { id: 'client', label: 'Yelp Mobile / Web App', type: 'client', x: 8, y: 50, description: 'Searches for nearby restaurants' },
+        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 30, y: 50, description: 'Handles auth, rate limits and routing by region', techStack: ['Envoy'] },
+        { id: 'search_srv', label: 'Proximity Search Service', type: 'service', x: 55, y: 50, description: 'Computes geohash cells, filters and ranks candidates', techStack: ['Go / Java'] },
+        { id: 'geo_cache', label: 'Geohash Spatial Index (Redis)', type: 'cache', x: 80, y: 25, description: 'Maps a geohash prefix to a list of place IDs', techStack: ['Redis Geospatial'] },
+        { id: 'db', label: 'Places DB (PostgreSQL + PostGIS)', type: 'database', x: 80, y: 75, description: 'Durable place data, with a GiST spatial index', techStack: ['PostgreSQL + PostGIS'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'gateway', label: '1. GET /places/nearby?lat=..&lng=..', protocol: 'HTTPS' },
@@ -919,9 +926,9 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         { id: 'e4', from: 'search_srv', to: 'db', label: '4. Hydrate Business Details', protocol: 'SQL' }
       ],
       flowSteps: [
-        { step: 1, title: 'Geohash Prefix Expansion', description: 'Client sends (lat 37.7749, lng -122.4194, radius 2km). Service converts coordinates to 6-character Geohash "9q8yyk" (~1.2km box) and fetches 8 neighboring Geohash boxes.', activeNodes: ['client', 'search_srv'], highlightDetails: 'Guarantees boundary places are not missed.', latencyEstimate: '1ms' },
-        { step: 2, title: 'In-Memory Spatial Point Retrieval', description: 'Search Service queries Redis using GEOSEARCH to retrieve candidate place IDs within 2km in < 2ms.', activeNodes: ['search_srv', 'geo_cache'], highlightDetails: 'Filters 100M places down to 50 local candidates in RAM.', latencyEstimate: '2ms' },
-        { step: 3, title: 'Filtering & Composite Ranking', description: 'Service filters candidates by open hours and category, ranks them by Score = (Rating * 0.5) + (1 / Distance * 0.3) + (ReviewCount * 0.2), and returns top 20.', activeNodes: ['search_srv', 'db', 'client'], highlightDetails: 'Total search roundtrip under 15ms.', latencyEstimate: '10ms' }
+        { step: 1, title: 'Find the geohash cells to search', description: 'The client sends (lat 37.7749, lng -122.4194, radius 2 km). The service converts the point to a 5-character geohash, "9q8yy" (a cell about 4.9 km wide), and adds the 8 neighboring cells.', activeNodes: ['client', 'search_srv'], highlightDetails: 'The cell is larger than the radius, so the 3x3 block of cells covers the whole search circle and boundary places are not missed.', latencyEstimate: '1ms' },
+        { step: 2, title: 'Look up candidates in memory', description: 'The search service asks Redis for the places in those cells, using GEOSEARCH to keep only those within 2 km. Redis answers from memory.', activeNodes: ['search_srv', 'geo_cache'], highlightDetails: 'This narrows 100M places down to a short list of local candidates.', latencyEstimate: '2ms' },
+        { step: 3, title: 'Filter and rank', description: 'The service filters candidates by opening hours and category, loads their details from PostgreSQL, and ranks them with a weighted score of normalized rating, closeness and review count (for example weights 0.5, 0.3 and 0.2). It returns the top 20.', activeNodes: ['search_srv', 'db', 'client'], highlightDetails: 'Most of the work happens in memory, so the whole search stays fast.', latencyEstimate: '10ms' }
       ]
     },
     apiDesign: [
@@ -944,33 +951,33 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
           { name: 'geohash', type: 'VARCHAR(12)', isIndex: true },
           { name: 'rating', type: 'FLOAT' }
         ],
-        notes: 'PostgreSQL with PostGIS SP-GiST / R-Tree index for spatial queries.'
+        notes: 'PostgreSQL with PostGIS. A GiST index (an R-tree variant) speeds up spatial queries.'
       }
     ],
     deepDives: [
       {
-        title: 'Geohash vs QuadTree for Proximity Search',
-        subtitle: 'Why Geohash prefix partitioning wins for distributed caching',
-        content: `1. Geohash Encoding:\n- Interleaves latitude and longitude into Base32 characters.\n- Prefix property: Places sharing the same 5-character prefix "9q8yy" are in the exact same 4.9km x 4.9km bounding box.\n- Sharding: Sharding the database by Geohash Prefix 4 (e.g. "9q8y") groups all businesses in San Francisco onto a single database shard!\n\n2. QuadTree:\n- Hierarchically subdivides space until each quadrant has <= 100 places.\n- Pros: Adapts to density (Manhattan has tiny sub-quadrants, rural areas have huge quadrants).\n- Cons: Harder to shard across distributed cache nodes than flat Geohash strings.`,
+        title: 'Geohash vs QuadTree for proximity search',
+        subtitle: 'Why geohash prefixes fit distributed caches well',
+        content: `1. Geohash:\n- It interleaves the bits of latitude and longitude and writes them as base-32 characters.\n- Prefix property: places that share a 5-character prefix such as "9q8yy" are in the same box, about 4.9 km by 4.9 km.\n- Sharding: sharding by a 4-character prefix (for example "9q8y") puts all of San Francisco on one shard. The cost is uneven shards, because dense cities get far more places than rural areas.\n- Weakness: two nearby points can have different prefixes if they sit on opposite sides of a cell edge. That is why a search also reads the 8 neighboring cells.\n\n2. QuadTree:\n- It splits space into four quadrants again and again, until each quadrant holds 100 places or fewer.\n- Pro: it adapts to density. Manhattan gets many small quadrants and rural areas get a few large ones.\n- Con: it is a tree in memory, which is harder to split across cache nodes than flat geohash string keys.`,
         keyTakeaways: [
-          'Geohashes are string keys, making them trivial to store in Redis and SQL B-Trees.',
-          'Always query the central Geohash + 8 surrounding neighbor cells to prevent boundary misses.'
+          'Geohashes are plain strings, so they are easy to use as keys in Redis and as B-tree indexes in SQL.',
+          'Always search the center cell and its 8 neighbors, so you do not miss places near a cell edge.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Boundary Edge Miss Problem',
-        impact: 'A user standing at the right edge of a Geohash box misses a restaurant 10 meters away on the left edge of the neighboring box.',
-        mitigation: 'Always query the 8 adjacent neighboring Geohash boxes (3x3 grid) and filter by true Euclidean / Haversine distance.'
+        bottleneck: 'Missing places near a cell boundary',
+        impact: 'A user standing at the right edge of one geohash cell does not see a restaurant 10 meters away, just across the edge, in the next cell.',
+        mitigation: 'Always query the 8 neighboring cells (a 3x3 block) and filter by true distance, using the Haversine formula (distance between two points on a sphere).'
       }
     ],
     interviewQA: [
       {
         question: 'How do you cache search results when users have infinite possible GPS coordinates?',
-        hint: 'Coordinate rounding / Grid quantization.',
-        goodAnswer: 'Round user coordinates to a 6-character Geohash (quantizing space into 1.2km grid cells). Cache search results in Redis keyed by geohash:category (e.g. cache:9q8yyk:cafe) for 10 minutes, achieving an 85% cache hit ratio.',
-        pitfalls: 'Caching by exact float coordinates (lat 37.77492819) which almost never repeat.'
+        hint: 'Coordinate rounding (grid quantization).',
+        goodAnswer: 'Round each user location to a geohash cell sized to the search radius (for example 5 characters, about 4.9 km, for a 2 km search). Cache the candidate places in Redis by cell and category, for example cache:9q8yy:cafe, for about 10 minutes. Then compute the exact distance and ranking for each request. The hit rate depends on how many users search in the same cells.',
+        pitfalls: 'Caching by exact coordinates (for example lat 37.77492819), which almost never repeat.'
       }
     ],
     similarSystems: ['Google Maps Nearby', 'TripAdvisor', 'Foursquare', 'Zomato'],
@@ -980,55 +987,56 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'distributed-cache-cluster',
     title: 'Design a Distributed Cache System (Redis / Memcached Cluster)',
     slug: 'distributed-cache-system',
-    tagline: 'High-performance in-memory key-value cluster, Consistent Hashing with virtual nodes, master-replica failover, and LRU memory management.',
+    tagline: 'An in-memory key-value cluster that spreads keys with consistent hashing, fails over to replicas, and evicts old keys when memory is full.',
     category: 'Storage & Infrastructure',
     difficulty: 'Advanced',
     readTime: '22 min read',
     scaleSummary: {
       dau: '100 Million Active Cache Keys',
       qps: '5,000,000 Cache Reads/sec / 500,000 Writes/sec',
-      storage: '2 Terabytes RAM in distributed cluster',
-      bandwidth: '50 GB/s In-Memory Throughput'
+      storage: '300 GB RAM in distributed cluster (100 GB x 3 replicas)',
+      bandwidth: '5.5 GB/s In-Memory Throughput'
     },
-    overview: 'A distributed in-memory cache system provides sub-millisecond key-value storage across a horizontally scaled cluster of nodes. The system implements Consistent Hashing with Virtual Nodes to distribute keys evenly and minimize rebalancing data migration during node additions or failures.',
+    overview: 'A distributed cache stores key-value data in memory across many nodes and answers in under a millisecond. It uses consistent hashing with virtual nodes to spread keys evenly, so adding or removing a node moves only a small share of the keys.',
     keyChallenges: [
-      'Consistent Hashing & Virtual Nodes: Distributing 100M keys evenly across 100 nodes without hash ring hot spots',
-      'Node Failure & Rebalancing: Adding or removing a node should only shift K/N keys rather than invalidating the entire cache',
-      'High-Throughput Concurrency: Sub-millisecond P99 latency under 5 Million QPS',
-      'Memory Eviction under Pressure: LRU / LFU eviction when memory reaches 90% capacity'
+      'Even key spread: distribute 100M keys evenly across 50 nodes, without hot spots on the hash ring, using consistent hashing and virtual nodes.',
+      'Changing the node count: adding or removing a node should move only about K/N keys (K keys, N nodes), not invalidate the whole cache.',
+      'Concurrency: keep P99 latency under 1 ms at 5 million requests per second.',
+      'Eviction: when memory reaches its limit, remove keys with an LRU (least recently used) or LFU (least frequently used) policy.'
     ],
     functionalRequirements: [
-      'GET(key), SET(key, value, ttl), DEL(key) operations in < 1ms',
-      'Automatic key expiration (TTL) and LRU eviction',
-      'Dynamic node scaling with minimal key rebalancing',
-      'Master-Replica replication with automatic failover'
+      'GET(key), SET(key, value, ttl) and DEL(key), each in under 1 ms.',
+      'Expire keys automatically with a TTL (time to live), and evict keys with LRU when memory is full.',
+      'Add or remove nodes with little key movement.',
+      'Replicate each master to replicas, with automatic failover.'
     ],
     nonFunctionalRequirements: [
-      'Latency: P99 < 1ms for all operations',
-      'High Availability 99.999%',
-      'Linear scalability: Adding 10 nodes increases capacity by 10x'
+      'Latency: P99 under 1 ms for all operations.',
+      'Availability: 99.999%.',
+      'Scalability: capacity grows roughly in proportion to the number of nodes.'
     ],
-    outOfScope: ['Multi-table SQL relational query engine'],
+    outOfScope: ['A relational SQL query engine with multi-table queries.'],
     capacityEstimations: {
       assumptions: [
-        '5M reads/sec; 500k writes/sec peak; 100M keys stored',
-        'Average key + value size: 1 KB -> 100M * 1 KB = 100 GB RAM active dataset (replicated 3x = 300 GB RAM)'
+        'Peak load: 5M reads/s and 500k writes/s, with 100M keys stored.',
+        'A key plus value averages 1 KB, so 100M × 1 KB = 100 GB of active data. With 3 copies in total, that is 300 GB of RAM.',
+        'Throughput: (5M reads + 500k writes) × 1 KB = 5.5 GB/s.'
       ],
       metrics: [
-        { label: 'Cluster Read Throughput', value: '5,000,000 ops/s', formula: 'Distributed across 50 cache nodes (100k ops/node)', description: 'Redis in-memory execution' },
-        { label: 'Key Migration on Resharding', value: 'Only 1/N Keys', formula: 'Consistent Hashing ring property', description: 'Minimal rebalance overhead' }
+        { label: 'Cluster Read Throughput', value: '5,000,000 ops/s', formula: 'Distributed across 50 cache nodes (100k ops/node)', description: 'Read operations handled by the Redis nodes' },
+        { label: 'Key Migration on Resharding', value: 'Only 1/N Keys', formula: 'Consistent Hashing ring property', description: 'Little data moves when the node count changes' }
       ],
-      conclusion: 'Consistent hashing with 256 virtual nodes per physical server ensures balanced memory distribution.'
+      conclusion: 'Consistent hashing with 256 virtual nodes per physical server spreads memory evenly across the servers.'
     },
     architecture: {
-      summary: 'Smart Client or Proxy (Twemproxy/Envoy) hashes key on 2^32 Consistent Hashing Ring with Virtual Nodes -> Routes request directly to target Redis Master node -> Async replication to Read Replica -> Gossip protocol monitors node health.',
+      summary: 'A smart client or proxy (Twemproxy or Envoy) hashes each key onto a ring from 0 to 2^32 - 1, where each server owns many virtual nodes. It sends the request to the master that owns that spot. The master replicates asynchronously to a replica, and a gossip protocol (nodes sharing health information with each other) detects failed nodes.',
       nodes: [
-        { id: 'client', label: 'Application Servers', type: 'client', x: 8, y: 50, description: 'Calls GET/SET with smart hash ring router' },
-        { id: 'proxy', label: 'Cache Router / Proxy', type: 'gateway', x: 35, y: 50, description: 'Maintains Consistent Hashing ring & connection pool', techStack: ['Envoy / Twemproxy'] },
-        { id: 'node_1', label: 'Redis Master Node 1', type: 'cache', x: 70, y: 20, description: 'Holds Ring Range 0 - 33%', techStack: ['Redis'] },
-        { id: 'node_2', label: 'Redis Master Node 2', type: 'cache', x: 70, y: 50, description: 'Holds Ring Range 33% - 66%', techStack: ['Redis'] },
-        { id: 'node_3', label: 'Redis Master Node 3', type: 'cache', x: 70, y: 80, description: 'Holds Ring Range 66% - 100%', techStack: ['Redis'] },
-        { id: 'replica', label: 'Read Replica Nodes', type: 'cache', x: 92, y: 50, description: 'Asynchronous replication & hot standby', techStack: ['Redis Replica'] }
+        { id: 'client', label: 'Application Servers', type: 'client', x: 8, y: 50, description: 'Calls GET and SET through a client library that knows the hash ring' },
+        { id: 'proxy', label: 'Cache Router / Proxy', type: 'gateway', x: 35, y: 50, description: 'Holds the consistent hashing ring and the connection pool', techStack: ['Envoy / Twemproxy'] },
+        { id: 'node_1', label: 'Redis Master Node 1', type: 'cache', x: 70, y: 20, description: 'In this diagram, owns about one third of the ring (as many small ranges)', techStack: ['Redis'] },
+        { id: 'node_2', label: 'Redis Master Node 2', type: 'cache', x: 70, y: 50, description: 'In this diagram, owns about one third of the ring (as many small ranges)', techStack: ['Redis'] },
+        { id: 'node_3', label: 'Redis Master Node 3', type: 'cache', x: 70, y: 80, description: 'In this diagram, owns about one third of the ring (as many small ranges)', techStack: ['Redis'] },
+        { id: 'replica', label: 'Read Replica Nodes', type: 'cache', x: 92, y: 50, description: 'Receives asynchronous replication and can take over if its master fails', techStack: ['Redis Replica'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'proxy', label: '1. GET user:1029', protocol: 'TCP' },
@@ -1037,15 +1045,15 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         { id: 'e4', from: 'node_2', to: 'replica', label: '4. Async Replication Stream', protocol: 'TCP', isAsync: true }
       ],
       flowSteps: [
-        { step: 1, title: 'Key Hashing & Ring Mapping', description: 'Proxy calculates hash = Murmur3("user:1029") % 2^32. It searches the circular sorted array of virtual nodes (Binary Search in O(log V)) to locate the closest clockwise server.', activeNodes: ['client', 'proxy'], highlightDetails: 'Deterministic O(log V) routing in < 0.05ms.', latencyEstimate: '0.05ms' },
-        { step: 2, title: 'In-Memory Key-Value Retrieval', description: 'Target Redis node retrieves value from in-memory hash table in O(1) time and updates key position in Doubly Linked List for LRU tracking.', activeNodes: ['proxy', 'node_2'], highlightDetails: 'Sub-millisecond data return.', latencyEstimate: '0.5ms' }
+        { step: 1, title: 'Hash the key and find its node', description: 'The proxy computes a 32-bit hash of "user:1029" (for example Murmur3). It binary-searches the sorted list of virtual nodes (O(log V)) to find the first one clockwise from that hash.', activeNodes: ['client', 'proxy'], highlightDetails: 'Routing is deterministic and fast: a binary search over the ring.', latencyEstimate: '0.05ms' },
+        { step: 2, title: 'Read the value from memory', description: 'The target Redis node looks up the key in its in-memory hash table in O(1) time and updates the key last-access time, which eviction uses later. Redis uses an approximate LRU, while Memcached keeps a linked list for LRU.', activeNodes: ['proxy', 'node_2'], highlightDetails: 'The data is already in RAM, so the read returns in well under a millisecond.', latencyEstimate: '0.5ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/v1/cache/set',
-        description: 'Set cache key with TTL',
+        description: 'Set a cache key with a TTL',
         requestBody: '{\n  "key": "user:profile:1029",\n  "value": "{\\"name\\":\\"Alex\\"}",\n  "ttl_seconds": 3600\n}'
       }
     ],
@@ -1060,33 +1068,33 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
           { name: 'virtual_nodes_count', type: 'INT' },
           { name: 'status', type: 'VARCHAR(10)' }
         ],
-        notes: 'Gossip protocol state tracking cluster topology.'
+        notes: 'Cluster topology, shared between nodes by the gossip protocol.'
       }
     ],
     deepDives: [
       {
-        title: 'Consistent Hashing with Virtual Nodes: Mathematical Proof',
-        subtitle: 'Why traditional Hash(key) % N destroys caches and how consistent hashing fixes it',
-        content: `Traditional Hashing: Node = Hash(key) % N.\nIf N=10 and 1 node fails (N becomes 9), almost 100% of existing keys map to a completely different server index. Result: Massive cache miss storm (Thundering Herd) that immediately crashes the primary database!\n\nConsistent Hashing Ring:\n1. Hash ring represents a circular range from 0 to 2^32 - 1.\n2. Server nodes are hashed onto points along the ring.\n3. Keys are mapped to the first server encountered moving CLOCKWISE.\n4. When a node is added or removed, ONLY keys falling between that node and its predecessor are migrated (exactly K/N keys migrated, while (N-1)/N keys remain valid!).\n\nVirtual Nodes (Vnodes):\nAssigning 200 virtual tokens per physical node (e.g. Node1#1, Node1#2... Node1#200) spreads data with < 5% variance across all physical servers!`,
+        title: 'Consistent hashing with virtual nodes',
+        subtitle: 'Why Hash(key) % N breaks a cache when N changes, and how consistent hashing fixes it',
+        content: `Simple hashing: node = Hash(key) % N.\nIf N = 10 and one node fails, N becomes 9. Most keys (about 90%) now map to a different server. The result is a flood of cache misses (a cache stampede) that can overload the database.\n\nConsistent hashing ring:\n1. The ring covers the range 0 to 2^32 - 1.\n2. Each server is hashed to a point on the ring.\n3. A key goes to the first server found moving clockwise from the key position.\n4. When a node is added or removed, only the keys between that node and its predecessor move. On average that is about K/N of K keys, and the other (N-1)/N stay where they are.\n\nVirtual nodes:\nGive each physical server many points on the ring (for example 256 tokens: Node1#1, Node1#2, ..., Node1#256). More points per server make the spread more even and also spread a failed node load across many survivors.\n\nHow real systems differ: Redis Cluster does not use a ring. It splits the key space into 16,384 hash slots and assigns slots to nodes. Moving slots moves only part of the data, which gives the same benefit. Memcached clients commonly use consistent hashing.`,
         keyTakeaways: [
-          'Consistent hashing minimizes key migration to exactly K/N on scaling.',
-          'Virtual nodes eliminate hot spots on the ring.'
+          'Consistent hashing moves only about K/N keys when the node count changes.',
+          'Virtual nodes spread keys more evenly and avoid hot spots on the ring.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Hot Key Overloading Single Cache Node',
-        impact: 'A viral key gets 200,000 reads/sec, saturating a single Redis node NIC bandwidth.',
-        mitigation: 'Key Suffix Replication: Store viral key under 10 replicas (key#1, key#2... key#10) and have clients randomly choose a suffix.'
+        bottleneck: 'A hot key overloads one cache node',
+        impact: 'A viral key gets 200,000 reads/s, more than the node that holds it can serve (about 100,000 operations/s in this design).',
+        mitigation: 'Store the hot key under several names (key#1, key#2, ... key#10) and let clients pick one at random, so the copies land on different nodes. A short-lived cache inside each client process also helps. The cost: every write must update all the copies.'
       }
     ],
     interviewQA: [
       {
         question: 'How does Redis implement LRU eviction when memory is full without high memory overhead?',
         hint: 'Approximated LRU with random sampling.',
-        goodAnswer: 'Instead of maintaining a massive true doubly linked list of 100M keys (which consumes huge RAM), Redis uses Approximated LRU: it samples 5 random keys, inspects their 24-bit last-access timestamps (lru clock), and evicts the oldest key among the sample. This achieves 99% accuracy of true LRU with zero extra memory pointers.',
-        pitfalls: 'Claiming Redis maintains a single global linked list across all keys.'
+        goodAnswer: 'A true LRU needs a linked list over all 100M keys, which adds pointers (extra memory) to every key and a list update on every read. Redis uses an approximated LRU instead. When memory is full, it samples a few random keys (5 by default), reads the 24-bit last-access clock of each, and evicts the oldest of the sample. Raising the sample size makes the result closer to a true LRU. It needs no extra pointers.',
+        pitfalls: 'Claiming that Redis keeps one global linked list of all keys.'
       }
     ],
     similarSystems: ['Redis Cluster', 'Memcached', 'Twemproxy', 'AWS ElastiCache'],
@@ -1096,55 +1104,56 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'realtime-gaming-leaderboard',
     title: 'Design a Real-Time Multiplayer Gaming Leaderboard',
     slug: 'gaming-leaderboard',
-    tagline: 'Millions of concurrent score updates, Redis Sorted Sets (Skip Lists), dense rank calculations, and global top 100 feeds.',
+    tagline: 'Rank millions of players in real time with Redis sorted sets, exact player ranks, and a global top 100.',
     category: 'Financial & High Throughput',
     difficulty: 'Intermediate',
     readTime: '18 min read',
     scaleSummary: {
       dau: '50 Million Active Gamers',
       qps: '150,000 Score Updates/sec / 50,000 Leaderboard Views/sec',
-      storage: '10 GB In-Memory Skip List Ranking Store',
-      bandwidth: '5 GB/s Real-Time Egress'
+      storage: '5 GB In-Memory Skip List Ranking Store (10 GB with 1 replica)',
+      bandwidth: '500 MB/s Real-Time Egress'
     },
-    overview: 'A real-time gaming leaderboard ranks millions of players by score, calculates exact percentile and player rank (e.g. "Rank #42,891 out of 5,000,000 players"), and serves live Top 100 leaderboards with sub-10ms response times.',
+    overview: 'A real-time leaderboard ranks millions of players by score. It returns a player exact rank (for example "#42,891 out of 5,000,000") and a live top 100, in under 10 ms.',
     keyChallenges: [
-      'High-Concurrency Score Increments: 150,000 players submitting match scores per second',
-      'Real-Time Rank Calculation: Finding player exact integer rank in O(log N) time rather than scanning millions of rows',
-      'Tie-Breaking: Ranking players with identical scores by who achieved the score first (FIFO)',
-      'Leaderboard Segmentation: Global, Country-specific, and Friends-only leaderboards'
+      'Write volume: 150,000 score updates per second.',
+      'Fast rank lookup: find a player exact rank in O(log N) time, without scanning millions of rows.',
+      'Ties: when two players have the same score, rank the one who reached it first higher.',
+      'Several boards: global, per country, and friends-only leaderboards.'
     ],
     functionalRequirements: [
-      'Submit new player score or increment score (ZADD / ZINCRBY)',
-      'Fetch global Top 100 players list with avatars and scores',
-      'Fetch current player rank and +/- 5 surrounding neighbor ranks',
-      'Daily, Weekly, and All-Time seasonal leaderboard resets'
+      'Submit a new score or add to a score (Redis ZADD or ZINCRBY).',
+      'Fetch the global top 100 with avatars and scores.',
+      'Fetch a player rank and the 5 players above and below.',
+      'Reset daily, weekly and seasonal leaderboards, and keep an all-time board.'
     ],
     nonFunctionalRequirements: [
-      'Rank query latency < 10ms',
-      'Score update reflection in < 500ms',
-      'High Availability 99.99%'
+      'Rank query latency under 10 ms.',
+      'A score update shows up in under 500 ms.',
+      'Availability: 99.99%.'
     ],
-    outOfScope: ['In-game cheat detection anti-tamper memory scanner'],
+    outOfScope: ['Cheat detection (anti-tamper checks inside the game).'],
     capacityEstimations: {
       assumptions: [
-        '50M active players; 150,000 score submissions/sec peak',
-        'Redis Sorted Set entry: user_id (UUID 36 bytes) + score (Float64 8 bytes) + Skip List node overhead = ~100 bytes',
-        '50M players * 100 bytes = 5 GB RAM total in Redis!'
+        '50M active players; 150,000 score submissions per second at peak.',
+        'One Redis sorted set entry holds a user ID (36-byte UUID), a score (8-byte float64) and skip list node overhead: roughly 100 bytes in this estimate.',
+        '50M players × 100 bytes = 5 GB of RAM. Real Redis overhead is higher, so treat this as a rough lower bound.',
+        'A leaderboard view is about 10 KB (top 100 entries): 50,000 views/s × 10 KB = 500 MB/s of egress.'
       ],
       metrics: [
-        { label: 'Score Update QPS', value: '150,000 / sec', formula: 'Peak ZINCRBY operations', description: 'Redis Cluster Ingestion' },
-        { label: 'Leaderboard RAM', value: '5 GB RAM', formula: '50M players in Redis ZSET', description: 'Skip List + Hash Table in memory' }
+        { label: 'Score Update QPS', value: '150,000 / sec', formula: 'Peak ZINCRBY operations', description: 'Peak ZINCRBY operations on Redis' },
+        { label: 'Leaderboard RAM', value: '5 GB RAM', formula: '50M players in Redis ZSET', description: 'Skip list plus hash table in memory' }
       ],
-      conclusion: 'Redis Sorted Sets (Skip Lists) handle 50M player ranks with O(log N) updates and lookups in RAM.'
+      conclusion: 'A Redis sorted set (a skip list plus a hash table) can hold 50M players in RAM with O(log N) updates and rank lookups. One sorted set lives on one Redis node, and one node handles roughly 100,000 simple operations per second. To reach 150,000 updates per second, split the players across several sorted sets (for example by score range) or batch the writes.'
     },
     architecture: {
-      summary: 'Game Clients submit scores -> Game Service -> Redis Sorted Set (ZSET) updates score -> Queries ZREVRANK for exact rank -> Periodic Kafka stream archives leaderboard snapshots to PostgreSQL for historical seasons.',
+      summary: 'Game clients submit scores to the game service, which updates a Redis sorted set (ZSET) and reads the player rank with ZREVRANK. A periodic job sends leaderboard snapshots through Kafka to PostgreSQL, which keeps the history of past seasons.',
       nodes: [
-        { id: 'client', label: 'Game Client (Mobile / PC)', type: 'client', x: 8, y: 50, description: 'Submits score after match' },
-        { id: 'gateway', label: 'Leaderboard API Gateway', type: 'gateway', x: 30, y: 50, description: 'Rate limits and validates signed score tokens', techStack: ['Envoy'] },
-        { id: 'leader_srv', label: 'Leaderboard Service', type: 'service', x: 55, y: 50, description: 'Manages seasonal ZSETs and rank queries', techStack: ['Go / Node.js'] },
-        { id: 'redis_zset', label: 'Redis Sorted Sets (ZSET)', type: 'cache', x: 80, y: 30, description: 'In-memory Skip List holding 50M scores', techStack: ['Redis Cluster'], scaleMetric: 'O(log N) rank lookup' },
-        { id: 'archive_db', label: 'Season Archive DB', type: 'database', x: 80, y: 70, description: 'PostgreSQL storing historical season winners', techStack: ['PostgreSQL'] }
+        { id: 'client', label: 'Game Client (Mobile / PC)', type: 'client', x: 8, y: 50, description: 'Submits the score after a match' },
+        { id: 'gateway', label: 'Leaderboard API Gateway', type: 'gateway', x: 30, y: 50, description: 'Rate limits requests and checks signed score tokens', techStack: ['Envoy'] },
+        { id: 'leader_srv', label: 'Leaderboard Service', type: 'service', x: 55, y: 50, description: 'Manages seasonal sorted sets and rank queries', techStack: ['Go / Node.js'] },
+        { id: 'redis_zset', label: 'Redis Sorted Sets (ZSET)', type: 'cache', x: 80, y: 30, description: 'In-memory skip list that holds the scores of 50M players', techStack: ['Redis Cluster'], scaleMetric: 'O(log N) rank lookup' },
+        { id: 'archive_db', label: 'Season Archive DB', type: 'database', x: 80, y: 70, description: 'PostgreSQL store for the results of past seasons', techStack: ['PostgreSQL'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'gateway', label: '1. POST /scores/submit', protocol: 'HTTPS' },
@@ -1154,15 +1163,15 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         { id: 'e5', from: 'leader_srv', to: 'archive_db', label: '5. Daily Snapshot', protocol: 'SQL', isAsync: true }
       ],
       flowSteps: [
-        { step: 1, title: 'Atomic Score Update', description: 'Client finishes game with 500 points. Leaderboard Service executes ZINCRBY leaderboard:season_5 500 "user_42" in Redis.', activeNodes: ['client', 'leader_srv', 'redis_zset'], highlightDetails: 'Skip List updates node position in O(log N) time (approx 26 pointer adjustments).', latencyEstimate: '1ms' },
-        { step: 2, title: 'Rank & Surrounding Players Query', description: 'Client requests rank. Server calls ZREVRANK to get player rank (#1,240) and ZREVRANGE to get top 100 players.', activeNodes: ['leader_srv', 'redis_zset', 'client'], highlightDetails: 'Returns Top 100 leaderboard in < 3ms.', latencyEstimate: '2ms' }
+        { step: 1, title: 'Update the score atomically', description: 'A client finishes a match with 500 points. The leaderboard service runs ZINCRBY leaderboard:season_5 500 "user_42" in Redis.', activeNodes: ['client', 'leader_srv', 'redis_zset'], highlightDetails: 'The skip list moves the entry to its new position in O(log N) steps.', latencyEstimate: '1ms' },
+        { step: 2, title: 'Query the rank and the top players', description: 'The client asks for its rank. The server calls ZREVRANK for the player rank (Redis counts ranks from 0, so add 1 for display, for example #1,240). It calls ZREVRANGE for the top 100, and again for the players just above and below the player.', activeNodes: ['leader_srv', 'redis_zset', 'client'], highlightDetails: 'Each call is O(log N) plus the number of entries returned, so the top 100 comes back quickly.', latencyEstimate: '2ms' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/api/v1/leaderboard/submit',
-        description: 'Submit game match score',
+        description: 'Submit a match score',
         requestBody: '{\n  "player_id": "ply_9821",\n  "score_delta": 450,\n  "match_token": "sig_a89x20"\n}',
         responseBody: '{\n  "new_total_score": 14250,\n  "global_rank": 482\n}'
       }
@@ -1178,33 +1187,33 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
           { name: 'final_score', type: 'BIGINT' },
           { name: 'final_rank', type: 'INT' }
         ],
-        notes: 'PostgreSQL table archiving final standings of concluded seasons.'
+        notes: 'PostgreSQL table that stores the final standings of finished seasons.'
       }
     ],
     deepDives: [
       {
-        title: 'Redis Sorted Set Internals: Skip List + Hash Table Architecture',
-        subtitle: 'Why Skip Lists beat Balanced Trees (AVL / Red-Black) for concurrent ranking',
-        content: `A Redis Sorted Set (ZSET) combines two data structures:\n1. Hash Table: Maps member (user_id) -> score in O(1) time.\n2. Skip List (Probabilistic Hierarchical Linked List):\n   - Multiple forward-pointer layers with skip step spans.\n   - Inserting or updating score is O(log N) with zero complex tree rebalancing rotations.\n   - Range queries (ZREVRANGEBYSCORE) are simple pointer traversals along the base linked list.\n   - Rank lookup (ZREVRANK) is O(log N) because each skip list pointer stores the span distance (number of elements jumped), allowing rank calculation by summing span counters during search!`,
+        title: 'Redis sorted set internals: skip list plus hash table',
+        subtitle: 'Why Redis uses a skip list rather than a balanced tree for ranking',
+        content: `A Redis sorted set (ZSET) combines two data structures:\n1. A hash table maps each member (user_id) to its score in O(1) time.\n2. A skip list (a linked list with extra layers of forward pointers that let a search skip over many nodes):\n   - Inserting or updating a score takes O(log N) on average, with no tree rebalancing or rotations.\n   - Range queries (ZREVRANGEBYSCORE) walk along the bottom linked list.\n   - Rank lookups (ZREVRANK) are O(log N) because each pointer stores its span (how many entries it jumps over). Adding up the spans along the search path gives the rank.\n\nRedis is single-threaded for commands, so lock-free concurrency is not the reason for this choice. Skip lists are simpler to implement than balanced trees and make range queries easy.`,
         keyTakeaways: [
-          'Span annotations on skip list pointers enable O(log N) rank calculation.',
-          'Skip lists have superior concurrency characteristics compared to Red-Black trees.'
+          'Span counts on skip list pointers make rank lookups O(log N).',
+          'A skip list is simpler than a balanced tree and supports fast range queries. Redis is single-threaded, so concurrency is not the reason.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Tie-Breaking for Identical Scores',
-        impact: 'If two players have 10,000 points, who is Rank #1?',
-        mitigation: 'Decimal Timestamp Inversion: Store score as: FloatScore = Score + (1 - (Timestamp / 1e12)). Earlier timestamps yield slightly higher floating point values, deterministically breaking ties in FIFO order.'
+        bottleneck: 'Ties between equal scores',
+        impact: 'If two players both have 10,000 points, who is rank #1?',
+        mitigation: 'Fold a time-based tie-breaker into the score: stored_score = Score + (1 - timestamp_seconds / 1e10). Earlier timestamps give slightly larger values, so the earlier player ranks higher. Keep the added part below 1. A float64 has about 15 to 16 significant digits, so very large scores can lose the tie-breaker.'
       }
     ],
     interviewQA: [
       {
         question: 'How do you handle Friends-Only Leaderboards (ranking among 50 friends)?',
-        hint: 'Batch querying vs dedicated ZSET.',
-        goodAnswer: 'Do NOT create a dedicated ZSET for every user friends list (millions of small sets waste RAM). Instead, fetch friend IDs from Social Graph DB, perform ZSCORE in batch (MGET) from the Global ZSET for those 50 IDs, and sort the 50 items in application memory in O(K log K) time (< 1ms).',
-        pitfalls: 'Creating a separate Redis ZSET for every user friendship circle.'
+        hint: 'Batch lookups vs a dedicated ZSET.',
+        goodAnswer: 'Do not create a sorted set for every user friend list, because millions of small sets waste memory. Instead, load the friend IDs from the social graph database, read their scores from the global sorted set in one batch with ZMSCORE (or pipelined ZSCORE calls), and sort the 50 results in application memory in O(K log K) time (under 1 ms).',
+        pitfalls: 'Creating a separate Redis sorted set for every friend circle.'
       }
     ],
     similarSystems: ['PlayFab Leaderboard', 'GameLift', 'Steam Leaderboards', 'Duolingo League'],
@@ -1214,57 +1223,57 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'ecommerce-recommendation-engine',
     title: 'Design an E-Commerce Real-Time Recommendation Engine',
     slug: 'ecommerce-recommendation-engine',
-    tagline: 'Two-Tower deep neural retrieval, real-time user session feature stores, approximate nearest neighbor (ANN) vector search, and reranking.',
+    tagline: 'Recommend products in real time with a two-tower model, session features, approximate nearest neighbor (ANN) search, and reranking.',
     category: 'Search & Big Data',
     difficulty: 'Advanced',
     readTime: '24 min read',
     scaleSummary: {
       dau: '100 Million Active Shoppers / 50 Million Products',
       qps: '80,000 Recommendation QPS / 1,000,000 Cart & Click Telemetry/sec',
-      storage: '20 TB Vector Embeddings & Feature Store in Milvus/Redis',
+      storage: '50 GB Item Vector Index in Milvus + Redis Feature Store',
       bandwidth: '10 GB/s Real-Time Serving'
     },
-    overview: 'A personalized e-commerce recommendation engine dynamically recommends "Products You May Also Like" and "Frequently Bought Together" on product pages and homefeeds based on real-time browsing behavior, cart additions, and collaborative filtering embeddings.',
+    overview: 'A recommendation engine suggests products such as "You may also like" and "Frequently bought together" on product pages and the home feed. It uses what the shopper just browsed, what they added to the cart, and embeddings (vectors of numbers that place similar items and users close together).',
     keyChallenges: [
-      'Sub-50ms Multi-Stage Recommendation Pipeline (Candidate Retrieval -> Filtering -> Heavy Deep Neural Ranking -> Business Rules)',
-      'Real-Time In-Session Personalization: If a user clicks 3 mountain bikes, the next page load MUST reflect outdoor cycling recommendations immediately',
-      'High-Dimensional Vector Search: Finding the top 500 nearest products from 50M items using HNSW / Milvus in < 15ms',
-      'Cold Start Problem for New Products and New Guest Shoppers'
+      'Latency: a multi-stage pipeline (candidate retrieval, filtering, neural ranking, business rules) must finish in under 50 ms.',
+      'In-session personalization: if a user clicks 3 mountain bikes, the next page load should already show cycling items.',
+      'Vector search: find the 500 nearest products among 50M items in under 15 ms, using an HNSW index (a graph-based approximate search index) such as Milvus.',
+      'Cold start: new products and new guest shoppers have no history to learn from.'
     ],
     functionalRequirements: [
-      'Personalized homepage feed recommendations ("Recommended for You")',
-      'Related item recommendations on product detail page ("Similar Items")',
-      'Cart cross-sell recommendations ("Frequently Bought Together")',
-      'Real-time ingestion of clicks, adds-to-cart, and search queries'
+      'Personalized home feed ("Recommended for You").',
+      'Related items on the product page ("Similar Items").',
+      'Cart cross-sell ("Frequently Bought Together").',
+      'Ingest clicks, add-to-cart events and searches in real time.'
     ],
     nonFunctionalRequirements: [
-      'Serving latency < 50ms (P99)',
-      'High availability 99.99% (fallback to trending products on model failure)',
-      'Recommendation freshness < 3 seconds after user interaction'
+      'Serving latency under 50 ms at P99.',
+      'Availability: 99.99%. If a model fails, fall back to trending products.',
+      'Freshness: recommendations reflect a user action within 3 seconds.'
     ],
-    outOfScope: ['Automated ad bidding PPC auction pricing'],
+    outOfScope: ['Ad bidding and pay-per-click auction pricing.'],
     capacityEstimations: {
       assumptions: [
-        '100M active shoppers; 50M products in catalog',
-        'Item Embedding: 256 float32 dimensions = 1 KB per product -> 50M * 1 KB = 50 GB Vector Index',
-        '80,000 recommendation requests/sec peak'
+        '100M active shoppers; 50M products in the catalog.',
+        'An item embedding has 256 float32 dimensions = 1 KB per product, so 50M × 1 KB = 50 GB of vectors (the HNSW graph adds more).',
+        '80,000 recommendation requests per second at peak.'
       ],
       metrics: [
-        { label: 'Recommendation QPS', value: '80,000 QPS', formula: 'Peak page view recommendations', description: 'Triton GPU & Vector Search' },
-        { label: 'Vector Index Size', value: '50 GB RAM', formula: '50M products * 256-dim embeddings in HNSW', description: 'Milvus / FAISS RAM footprint' }
+        { label: 'Recommendation QPS', value: '80,000 QPS', formula: 'Peak page view recommendations', description: 'Peak recommendation requests (GPU ranking plus vector search)' },
+        { label: 'Vector Index Size', value: '50 GB RAM', formula: '50M products * 256-dim embeddings in HNSW', description: 'Memory for the vectors in Milvus or FAISS, not counting the graph overhead' }
       ],
-      conclusion: 'A Two-Tower neural model separating Item Embeddings (offline/cached) from User Query Embeddings (real-time GPU) is required.'
+      conclusion: 'Use a two-tower model: item embeddings are computed offline and stored in the index, and only the user embedding is computed at request time on a GPU. This keeps request-time work small.'
     },
     architecture: {
-      summary: 'User clicks stream to Kafka -> Flink updates Real-Time Feature Store (Redis) -> Recommendation Orchestrator generates User Embedding -> Vector DB (Milvus) retrieves top 500 candidates via ANN -> Deep Ranking Model scores candidates -> Business Filter ensures diversity -> Return Top 10 items.',
+      summary: 'Click events stream into Kafka, and Flink updates a real-time feature store in Redis. At request time, the orchestrator builds a user embedding and asks the vector database (Milvus) for the 500 nearest products by ANN search. A deep ranking model scores those candidates. Business rules add diversity and remove out-of-stock items, and the service returns the top 10.',
       nodes: [
-        { id: 'client', label: 'Shopper App', type: 'client', x: 8, y: 50, description: 'Browses products & views recommendations' },
-        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 26, y: 50, description: 'Proxies request to Rec Orchestrator', techStack: ['Envoy'] },
-        { id: 'rec_srv', label: 'Recommendation Orchestrator', type: 'service', x: 48, y: 50, description: 'Coordinates candidate generation & ranking', techStack: ['Go / Java'] },
-        { id: 'feature_store', label: 'Real-Time Feature Store', type: 'cache', x: 48, y: 15, description: 'Last 10 clicked categories & user profile', techStack: ['Redis / Feast'] },
-        { id: 'vector_db', label: 'Vector ANN Index (Milvus)', type: 'search', x: 72, y: 30, description: 'Indexes 50M product embeddings via HNSW', techStack: ['Milvus / Pinecone'] },
-        { id: 'ranking_gpu', label: 'Deep Ranking Engine (Triton)', type: 'worker', x: 72, y: 70, description: 'Cross-Network Neural Model scores candidates', techStack: ['PyTorch / NVIDIA Triton'] },
-        { id: 'catalog_db', label: 'Product Catalog DB', type: 'database', x: 92, y: 50, description: 'Hydrates prices, stock, and images', techStack: ['PostgreSQL / Cassandra'] }
+        { id: 'client', label: 'Shopper App', type: 'client', x: 8, y: 50, description: 'Browses products and shows recommendations' },
+        { id: 'gateway', label: 'API Gateway', type: 'gateway', x: 26, y: 50, description: 'Forwards the request to the orchestrator', techStack: ['Envoy'] },
+        { id: 'rec_srv', label: 'Recommendation Orchestrator', type: 'service', x: 48, y: 50, description: 'Coordinates candidate retrieval and ranking', techStack: ['Go / Java'] },
+        { id: 'feature_store', label: 'Real-Time Feature Store', type: 'cache', x: 48, y: 15, description: 'Holds the user profile and the last 10 clicked categories', techStack: ['Redis / Feast'] },
+        { id: 'vector_db', label: 'Vector ANN Index (Milvus)', type: 'search', x: 72, y: 30, description: 'Indexes the embeddings of 50M products with HNSW', techStack: ['Milvus / Pinecone'] },
+        { id: 'ranking_gpu', label: 'Deep Ranking Engine (Triton)', type: 'worker', x: 72, y: 70, description: 'A neural ranking model scores the candidates on GPUs', techStack: ['PyTorch / NVIDIA Triton'] },
+        { id: 'catalog_db', label: 'Product Catalog DB', type: 'database', x: 92, y: 50, description: 'Provides current prices, stock and images', techStack: ['PostgreSQL / Cassandra'] }
       ],
       edges: [
         { id: 'e1', from: 'client', to: 'gateway', label: '1. GET /rec/home', protocol: 'HTTPS' },
@@ -1275,9 +1284,9 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         { id: 'e6', from: 'rec_srv', to: 'catalog_db', label: '6. Hydrate Top 10 Details', protocol: 'SQL' }
       ],
       flowSteps: [
-        { step: 1, title: 'Feature Retrieval & Query Embedding', description: 'Orchestrator pulls user recent browsing history (last 5 items viewed in session) from Redis and converts user context into a 256-dim embedding vector.', activeNodes: ['rec_srv', 'feature_store'], highlightDetails: 'Session features update in < 500ms after user clicks.', latencyEstimate: '5ms' },
-        { step: 2, title: 'Candidate Generation via HNSW Vector Search', description: 'Milvus performs Approximate Nearest Neighbor (ANN) search over 50M product vectors, returning 500 candidate products in 8ms.', activeNodes: ['rec_srv', 'vector_db'], highlightDetails: 'Cosine similarity on HNSW graph.', latencyEstimate: '8ms' },
-        { step: 3, title: 'Deep Neural Ranking & Business Filtering', description: 'Triton GPU scores 500 candidates for Probability(Purchase), filters out out-of-stock items, applies category diversity rules, and returns Top 10 products.', activeNodes: ['rec_srv', 'ranking_gpu', 'catalog_db', 'client'], highlightDetails: 'End-to-end recommendation served in < 35ms.', latencyEstimate: '20ms' }
+        { step: 1, title: 'Fetch features and build the user embedding', description: 'The orchestrator reads the user recent browsing history (the last 5 items viewed in this session) from Redis. The user tower model turns that context into a 256-dimension embedding.', activeNodes: ['rec_srv', 'feature_store'], highlightDetails: 'Click events update the features within seconds.', latencyEstimate: '5ms' },
+        { step: 2, title: 'Retrieve candidates with HNSW vector search', description: 'Milvus runs an approximate nearest neighbor (ANN) search over 50M product vectors and returns 500 candidates in about 8 ms.', activeNodes: ['rec_srv', 'vector_db'], highlightDetails: 'Similarity is the inner product of the vectors (the same as cosine similarity when vectors are normalized).', latencyEstimate: '8ms' },
+        { step: 3, title: 'Rank with a neural model and apply business rules', description: 'A Triton GPU server scores the 500 candidates by the predicted probability of purchase. The orchestrator removes out-of-stock items, applies category diversity rules, and returns the top 10.', activeNodes: ['rec_srv', 'ranking_gpu', 'catalog_db', 'client'], highlightDetails: 'The end-to-end target is under 35 ms, inside the 50 ms budget.', latencyEstimate: '20ms' }
       ]
     },
     apiDesign: [
@@ -1299,33 +1308,33 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
           { name: 'category_id', type: 'INT' },
           { name: 'in_stock', type: 'BOOLEAN' }
         ],
-        notes: 'Milvus vector index using HNSW M=16, efConstruction=200.'
+        notes: 'Milvus vector index built with HNSW (M=16, efConstruction=200). M is the number of links per node and efConstruction is the search width while building. Higher values give better recall but use more memory and build time.'
       }
     ],
     deepDives: [
       {
-        title: 'The Two-Tower Neural Network Architecture',
-        subtitle: 'How modern AI systems separate user and item representations for real-time serving',
-        content: `Why naive deep learning is too slow at runtime:\nEvaluating a complex 50-layer neural network between 1 user and 50,000,000 products on every click would require 50 Million neural network forward passes (taking minutes per request).\n\nTwo-Tower Solution:\n1. Item Tower (Offline): Generates and indexes 256-dimensional embeddings for all 50M products offline in background batch jobs.\n2. User Tower (Online): Takes user real-time features (device, location, recent clicks) and computes 1 single 256-dim User Vector in < 2ms.\n3. Inner Product (Dot Product): The predicted affinity score is simply DotProduct(User_Vector, Item_Vector)!\n4. Vector DB (Milvus/FAISS) computes nearest dot products across 50M items in < 10ms using HNSW graphs.`,
+        title: 'The two-tower architecture',
+        subtitle: 'How separating user and item models makes real-time serving possible',
+        content: `Why a full model is too slow at request time:\nScoring every one of 50M products with a large neural network for each click would need 50M model runs per request. That is far too slow for a 50 ms budget.\n\nTwo-tower solution:\n1. Item tower (offline): batch jobs compute a 256-dimension embedding for every product and load them into the vector index. New products get an embedding when they are added.\n2. User tower (online): takes real-time features (device, location, recent clicks) and computes one 256-dimension user vector in about 2 ms.\n3. Inner product: the predicted affinity is DotProduct(User_Vector, Item_Vector).\n4. Vector database (Milvus or FAISS): finds the items with the highest inner product among 50M using an HNSW graph, in about 10 ms.\n\nA second, heavier ranking model then scores only the few hundred retrieved candidates.`,
         keyTakeaways: [
-          'Decouples offline item computation from fast online query inference.',
-          'Enables sub-20ms candidate retrieval from 50 Million items.'
+          'Item embeddings are computed offline, so only a small model runs per request.',
+          'Candidate retrieval becomes an approximate nearest neighbor lookup instead of scoring every item.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'Vector DB CPU Saturation during Traffic Spikes',
-        impact: 'ANN search latency spikes from 8ms to 200ms.',
-        mitigation: 'Cache the Top 100 candidate product IDs in Redis for common user persona clusters (e.g. "Male_Tech_Shopper_25-34") with a 30-minute TTL.'
+        bottleneck: 'Vector database CPU overload in traffic spikes',
+        impact: 'ANN search latency rises from 8 ms to 200 ms.',
+        mitigation: 'Cache the top 100 candidate product IDs in Redis for common user segments (for example cycling enthusiasts), with a 30-minute TTL. The cost is less personalization for cached results.'
       }
     ],
     interviewQA: [
       {
         question: 'How do you handle the "Filter Bubble" where users are only recommended items identical to what they just viewed?',
-        hint: 'Exploration vs Exploitation (Epsilon-Greedy / Multi-Armed Bandits).',
-        goodAnswer: 'Introduce an Exploration Stage (e.g. 10% epsilon-greedy or Multi-Armed Bandits) that injects popular or serendipitous items from adjacent categories into the final reranking stage, measuring if the user engages with novel item domains.',
-        pitfalls: 'Only relying on nearest neighbor similarity without diversity constraints.'
+        hint: 'Exploration vs exploitation (epsilon-greedy or multi-armed bandits).',
+        goodAnswer: 'Add an exploration step. For example, with an epsilon-greedy policy (10% of slots) or a multi-armed bandit, put popular or surprising items from nearby categories into the final reranking. Then measure whether users engage with them. This trades a little short-term relevance for variety.',
+        pitfalls: 'Relying only on nearest-neighbor similarity, with no diversity rules.'
       }
     ],
     similarSystems: ['Amazon Recommendations', 'Alibaba Taobao Recs', 'Pinterest Visual Search', 'Netflix Recommendations'],
@@ -1335,7 +1344,7 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
     id: 'stock-exchange-matching-engine',
     title: 'Design a High-Frequency Stock Exchange & Order Matching Engine',
     slug: 'stock-exchange-matching-engine',
-    tagline: 'Ultra-low microsecond latency order matching, LMAX Disruptor ring buffer, limit order book (LOB), and deterministic audit logging.',
+    tagline: 'Match buy and sell orders in microseconds, using a single-threaded engine, a ring buffer, a limit order book and a replayable journal.',
     category: 'Financial & High Throughput',
     difficulty: 'Advanced',
     readTime: '26 min read',
@@ -1343,49 +1352,50 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
       dau: '500,000 Active Traders / 10,000 Tickers',
       qps: '1,000,000 Order Messages / sec (Microsecond P99 Latency)',
       storage: '100% Deterministic Sequential Journal (Zero data loss)',
-      bandwidth: '20 GB/s Multicast UDP Market Data Feed'
+      bandwidth: '64 MB/s Multicast UDP Market Data Feed'
     },
-    overview: 'A financial stock exchange matching engine processes Limit and Market Buy/Sell orders for equity symbols (e.g. AAPL, GOOG). The system requires deterministic price-time priority execution (FIFO), sub-10 microsecond matching latency, and high-speed UDP market data multicast.',
+    overview: 'A stock exchange matching engine takes limit and market buy and sell orders for symbols such as AAPL and GOOG. It matches them by price-time priority (the best price first, and among equal prices the earliest order first), in about 10 microseconds, and broadcasts the results to all participants over UDP multicast.',
     keyChallenges: [
-      'Microsecond Execution Latency: P99 latency must be < 15 microseconds (Java GC pauses and OS context switches are intolerable)',
-      'Price-Time Priority (FIFO): Orders at the same price level MUST execute in strict arrival timestamp order',
-      'Lock-Free Single-Threaded Architecture (LMAX Disruptor Pattern)',
-      'High-Speed Market Data Dissemination (ITCH / OUCH Binary Protocols over UDP Multicast)'
+      'Latency: matching must stay in the single-digit microsecond range, so garbage collection pauses and OS context switches are not acceptable.',
+      'Price-time priority: orders at the same price must execute in the exact order they arrived.',
+      'Single-threaded, lock-free design: the LMAX Disruptor pattern (a ring buffer that passes orders to one matching thread without locks).',
+      'Market data: send updates fast using binary protocols such as ITCH (market data) and OUCH (order entry), with ITCH sent over UDP multicast.'
     ],
     functionalRequirements: [
-      'Submit Limit Orders (Buy/Sell at specific price) and Market Orders (Buy/Sell at best available price)',
-      'Cancel and modify active working orders',
-      'Match incoming orders against Limit Order Book (LOB) using Price-Time Priority',
-      'Broadcast Level 2 Market Data depth feeds (Top 10 bids/asks) to market participants',
-      'Generate trade execution confirmations and settlement trade reports'
+      'Accept limit orders (buy or sell at a given price) and market orders (buy or sell at the best available price).',
+      'Cancel and modify working orders.',
+      'Match incoming orders against the limit order book (LOB) by price-time priority.',
+      'Broadcast Level 2 market data (the top 10 bid and ask price levels) to participants.',
+      'Send execution confirmations and trade reports for settlement.'
     ],
     nonFunctionalRequirements: [
-      'Ultra Low Latency: Order execution latency < 10 microseconds (µs)',
-      'Deterministic Execution: Replaying journal input log reproduces identical trade outputs',
-      'Zero Data Loss: Every order written to sequential NVMe journal before matching',
-      'High Availability: Hot-Standby replica with zero-downtime failover'
+      'Latency: order execution in under 10 microseconds (µs).',
+      'Determinism: replaying the input journal must produce exactly the same trades.',
+      'No data loss: every order is written to a sequential NVMe journal before it is matched.',
+      'Availability: a hot-standby replica that takes over with minimal downtime.'
     ],
-    outOfScope: ['Post-trade physical paper certificate delivery settlement (T+1 clearing house)'],
+    outOfScope: ['Clearing and settlement after the trade (the T+1 process).'],
     capacityEstimations: {
       assumptions: [
-        '1 Million order messages/sec peak during market open (9:30 AM EST)',
-        'Binary order struct: 64 bytes (order_id, symbol_id, price, qty, side, timestamp)',
-        'Sequential Journal Ingress = 1M * 64 bytes = 64 MB/sec (sequential disk I/O on NVMe SSD)'
+        '1 million order messages per second at peak, at market open (9:30 AM Eastern).',
+        'A binary order record is 64 bytes (order_id, symbol_id, price, qty, side, timestamp).',
+        'Journal write rate: 1M × 64 bytes = 64 MB/s of sequential writes on NVMe SSD.',
+        'Market data: about one book update (64 bytes) per order message, sent once per multicast group = 64 MB/s.'
       ],
       metrics: [
-        { label: 'Order Execution Latency', value: '< 10 µs', formula: 'In-memory single-threaded matching loop', description: 'Sub-10 microsecond execution' },
-        { label: 'Throughput', value: '1,000,000 orders/s', formula: 'Single-thread core processing with LMAX Disruptor', description: 'Lock-free ring buffer' }
+        { label: 'Order Execution Latency', value: '< 10 µs', formula: 'In-memory single-threaded matching loop', description: 'Single-threaded matching loop that runs entirely in memory' },
+        { label: 'Throughput', value: '1,000,000 orders/s', formula: 'Single-thread core processing with LMAX Disruptor', description: 'Lock-free ring buffer feeding the matching thread' }
       ],
-      conclusion: 'A single-threaded, lock-free CPU core per stock symbol running in C++ or zero-GC Java (Disruptor) is mandatory.'
+      conclusion: 'Run matching on a single thread per symbol (or per group of symbols), with no locks, in C++ or in Java that avoids garbage collection (such as the Disruptor). One symbol is never split across threads. Each thread is pinned to its own CPU core.'
     },
     architecture: {
-      summary: 'Traders send FIX/OUCH binary orders over 10GbE network -> Gateway assigns sequential sequence number and writes to NVMe Sequential Journal -> Pushes to Lock-Free Ring Buffer (LMAX Disruptor) -> Single-Threaded Matching Engine matches against Limit Order Book (B-Tree + Doubly Linked List) -> Publishes trades via UDP Multicast (ITCH).',
+      summary: 'Traders send orders in FIX (text) or OUCH (binary) over a 10 GbE network. The gateway checks risk, gives each order a sequence number, and appends it to an NVMe journal. It then puts the order in a lock-free ring buffer (LMAX Disruptor). A single-threaded matching engine matches it against the limit order book (a B-tree of price levels, each with a linked list of orders) and publishes trades with ITCH over UDP multicast.',
       nodes: [
-        { id: 'trader', label: 'Trading Firm (HFT / Broker)', type: 'client', x: 8, y: 50, description: 'Sends binary FIX / OUCH orders' },
-        { id: 'gateway', label: 'Order Entry Gateway', type: 'gateway', x: 28, y: 50, description: 'Assigns sequence number & performs pre-trade risk', techStack: ['C++ / Kernel Bypass (Solarflare DPDK)'] },
-        { id: 'journal', label: 'Sequential NVMe Journal', type: 'storage', x: 50, y: 15, description: 'Append-only raw order log (Zero data loss)', techStack: ['Direct NVMe I/O (O_DIRECT)'] },
-        { id: 'disruptor', label: 'Lock-Free Ring Buffer', type: 'queue', x: 50, y: 50, description: 'LMAX Disruptor inter-thread queue', techStack: ['Memory-Mapped Ring Buffer'] },
-        { id: 'matching_core', label: 'Matching Engine Core', type: 'worker', x: 75, y: 50, description: 'Single-threaded CPU pinned core per ticker', techStack: ['C++ Order Book (B-Tree + Doubly Linked List)'] },
+        { id: 'trader', label: 'Trading Firm (HFT / Broker)', type: 'client', x: 8, y: 50, description: 'Sends orders in FIX or OUCH format' },
+        { id: 'gateway', label: 'Order Entry Gateway', type: 'gateway', x: 28, y: 50, description: 'Assigns sequence numbers and runs pre-trade risk checks', techStack: ['C++ / Kernel Bypass (Solarflare DPDK)'] },
+        { id: 'journal', label: 'Sequential NVMe Journal', type: 'storage', x: 50, y: 15, description: 'Append-only log of every order, so the exact input can be replayed', techStack: ['Direct NVMe I/O (O_DIRECT)'] },
+        { id: 'disruptor', label: 'Lock-Free Ring Buffer', type: 'queue', x: 50, y: 50, description: 'LMAX Disruptor queue that passes orders between threads', techStack: ['Memory-Mapped Ring Buffer'] },
+        { id: 'matching_core', label: 'Matching Engine Core', type: 'worker', x: 75, y: 50, description: 'Single-threaded matching on a CPU core pinned to one symbol (or group of symbols)', techStack: ['C++ Order Book (B-Tree + Doubly Linked List)'] },
         { id: 'multicast', label: 'Market Data UDP Multicast', type: 'service', x: 92, y: 50, description: 'Broadcasts ITCH Level 2 depth feeds', techStack: ['UDP Multicast (ITCH protocol)'] }
       ],
       edges: [
@@ -1397,17 +1407,17 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         { id: 'e6', from: 'matching_core', to: 'trader', label: '6. Order ACK / Fill', protocol: 'TCP' }
       ],
       flowSteps: [
-        { step: 1, title: 'Kernel Bypass Ingestion & Risk Check', description: 'Order arrives over 10GbE network. Solarflare DPDK / Solarflare Onload kernel-bypass driver copies packet straight to user space RAM, bypassing OS kernel context switches.', activeNodes: ['trader', 'gateway'], highlightDetails: 'Cuts network latency from 50µs to 1.2µs.', latencyEstimate: '1.2 µs' },
-        { step: 2, title: 'Sequential NVMe Journaling', description: 'Gateway appends order to an append-only NVMe journal file with fsync. Guarantees 100% crash recovery replayability.', activeNodes: ['gateway', 'journal'], highlightDetails: 'Sequential SSD writes take < 2 µs.', latencyEstimate: '2 µs' },
-        { step: 3, title: 'Single-Threaded Lock-Free Matching', description: 'Matching engine core (pinned to dedicated CPU core #4) pops order from Ring Buffer. It walks the Limit Order Book (B-Tree of Price levels, each containing a FIFO Doubly Linked List of Orders) and executes the trade.', activeNodes: ['disruptor', 'matching_core'], highlightDetails: 'Zero locks, zero mutexes, zero context switches.', latencyEstimate: '1.5 µs' },
-        { step: 4, title: 'UDP Multicast Trade Dissemination', description: 'Engine formats binary ITCH trade message and broadcasts over UDP Multicast to all market participant trading desks simultaneously.', activeNodes: ['matching_core', 'multicast', 'trader'], highlightDetails: 'Sub-microsecond market data broadcast.', latencyEstimate: '1.8 µs' }
+        { step: 1, title: 'Kernel-bypass ingestion and risk check', description: 'The order arrives over the 10 GbE network. A kernel-bypass network stack (such as Solarflare Onload or DPDK) hands the packet straight to user-space memory, skipping OS kernel context switches. The gateway runs pre-trade risk checks.', activeNodes: ['trader', 'gateway'], highlightDetails: 'Skipping the kernel avoids system calls and extra copies, so packets reach the application faster.', latencyEstimate: '1.2 µs' },
+        { step: 2, title: 'Journal the order', description: 'The gateway appends the order to an append-only NVMe journal, so the exact input can be replayed after a crash.', activeNodes: ['gateway', 'journal'], highlightDetails: 'Sequential appends are the fastest disk write pattern. The 2 µs figure is a target that needs batched writes or fast persistent storage. A separate disk sync (fsync) for every order would take longer.', latencyEstimate: '2 µs' },
+        { step: 3, title: 'Lock-free matching on one thread', description: 'The matching thread, pinned to a dedicated CPU core, takes the order from the ring buffer. It walks the limit order book (a B-tree of price levels, each holding a first-in-first-out linked list of orders) and executes the trade.', activeNodes: ['disruptor', 'matching_core'], highlightDetails: 'The matching thread uses no locks and has no context switches.', latencyEstimate: '1.5 µs' },
+        { step: 4, title: 'Broadcast the trade over UDP multicast', description: 'The engine builds a binary ITCH trade message and sends it over UDP multicast, so all market participants receive it at the same time.', activeNodes: ['matching_core', 'multicast', 'trader'], highlightDetails: 'One multicast send reaches every subscriber. UDP can drop packets, so feeds carry sequence numbers and offer a retransmission channel.', latencyEstimate: '1.8 µs' }
       ]
     },
     apiDesign: [
       {
         method: 'POST',
         path: '/v1/orders/enter',
-        description: 'Enter new Limit Buy order (OUCH Protocol Binary Spec)',
+        description: 'Enter a new limit buy order. Real exchanges use binary OUCH over TCP; JSON is shown here for readability.',
         requestBody: '{\n  "symbol": "AAPL",\n  "side": "BUY",\n  "price": 185.50,\n  "shares": 100,\n  "time_in_force": "DAY"\n}',
         responseBody: '{\n  "order_token": "ord_8829102",\n  "status": "FILLED",\n  "executed_price": 185.50,\n  "executed_shares": 100\n}'
       }
@@ -1418,36 +1428,36 @@ export const INFRASTRUCTURE_CASE_STUDIES: CaseStudy[] = [
         type: 'NoSQL Key-Value',
         shardingKey: 'symbol',
         fields: [
-          { name: 'price_level', type: 'INT', isPrimary: true, notes: 'Integer cents (e.g. 18550)' },
-          { name: 'head_order_ptr', type: 'POINTER', notes: 'FIFO Doubly Linked List of resting orders' },
+          { name: 'price_level', type: 'INT', isPrimary: true, notes: 'Price as integer cents (for example 18550)' },
+          { name: 'head_order_ptr', type: 'POINTER', notes: 'Linked list (first in, first out) of resting orders at this price' },
           { name: 'total_volume', type: 'BIGINT' }
         ],
-        notes: 'In-memory C++ cache-line aligned B-Tree struct.'
+        notes: 'In-memory C++ B-tree structure, aligned to CPU cache lines.'
       }
     ],
     deepDives: [
       {
-        title: 'The Limit Order Book (LOB) Data Structure: B-Tree + Doubly Linked List',
-        subtitle: 'How to achieve O(1) order cancellation, insertion, and matching',
-        content: `A Limit Order Book must support 3 critical operations:\n1. Insert Order: O(1) if price level exists; O(log P) to insert new price level.\n2. Cancel Order: Must be STRICTLY O(1) (Traders cancel millions of orders/sec when price moves).\n3. Match Order: O(1) at top of book.\n\nOptimal Data Structure:\n- Price Levels Map: A balanced B-Tree (or sparse array) mapping Price -> PriceLevel pointer.\n- Order Queue per Price Level: A Doubly Linked List of Orders (Head = oldest order, Tail = newest order).\n- Global Order Lookup Hash Map: Maps order_id -> Direct memory pointer to Order node in the doubly linked list.\n\nWhy this is unbeatable:\n- Cancel Order: Hash map resolves pointer in O(1); node removes itself from doubly linked list in O(1) (node->prev->next = node->next)! Zero list traversal needed!`,
+        title: 'The limit order book data structure: B-tree plus doubly linked list',
+        subtitle: 'How to make order insert, cancel and match fast',
+        content: `A limit order book must support three operations:\n1. Insert an order: O(1) if the price level exists, O(log P) to create a new price level (P is the number of price levels).\n2. Cancel an order: this must be O(1), because traders cancel huge numbers of orders when the price moves.\n3. Match an order: O(1) at the top of the book, then the next level as needed.\n\nData structures:\n- Price level map: a balanced B-tree (or a sparse array) that maps each price to a price level.\n- Order queue per price level: a doubly linked list of orders (head = oldest, tail = newest).\n- Global order lookup: a hash map from order_id to a direct pointer to the order node in its linked list.\n\nWhy this works:\n- To cancel, the hash map finds the node in O(1), and the node removes itself from the doubly linked list in O(1) (node->prev->next = node->next). No list walk is needed. If that was the last order at the price, the empty level is removed from the tree in O(log P).`,
         keyTakeaways: [
-          'Doubly linked list allows O(1) cancellations at any depth of the book.',
-          'Price levels are stored as integers to eliminate float rounding errors.'
+          'A doubly linked list lets a cancel run in O(1) at any depth in the book.',
+          'Prices are stored as integers, which avoids floating-point rounding errors.'
         ]
       }
     ],
     bottlenecksAndMitigations: [
       {
-        bottleneck: 'OS Context Switches and Thread Lock Contention',
-        impact: 'A POSIX mutex lock contention stalls execution by 5 to 50 microseconds.',
-        mitigation: 'LMAX Disruptor Pattern: Single-threaded execution loop pinned to isolated CPU core (isolcpus=4) using lock-free ring buffers with CPU cache-line padding (preventing False Sharing in L1/L2 cache).'
+        bottleneck: 'OS context switches and lock contention',
+        impact: 'When threads contend for a lock, a thread can be put to sleep and wait many microseconds, which is far above the 10 µs target.',
+        mitigation: 'Use the LMAX Disruptor pattern: a single-threaded loop pinned to an isolated CPU core (for example isolcpus=4) fed by a lock-free ring buffer. Pad the data to CPU cache lines to prevent false sharing (two cores invalidating each other cache lines because their data sits on the same line).'
       }
     ],
     interviewQA: [
       {
         question: 'Why is a single-threaded matching engine faster than a 64-thread multi-threaded matching engine for a single stock?',
-        hint: 'Cache coherency and CPU cache-line bouncing (MESI protocol).',
-        goodAnswer: 'In a multi-threaded engine, multiple threads modifying the same Order Book memory cause CPU cache-lines to constantly bounce across CPU core caches (MESI invalidation storm) and require mutex locks. A single thread pinned to 1 CPU core keeps the entire active Order Book in L1/L2 CPU cache (0.5ns latency) and eliminates all locking overhead.',
+        hint: 'Cache coherency and cache-line bouncing (the MESI protocol).',
+        goodAnswer: 'In a multi-threaded engine, several threads change the same order book. Their CPU cores keep invalidating each other cache lines (the MESI protocol), and the threads need locks. Orders for one symbol must still be processed in strict sequence, so extra threads add little useful parallelism. A single thread pinned to one core keeps the active order book in its L1 and L2 caches (a few nanoseconds or less per access) and needs no locks.',
         pitfalls: 'Assuming more CPU threads always means faster execution.'
       }
     ],

@@ -45,6 +45,7 @@ This document provides mandatory guidance for autonomous AI coding agents (Antig
 | [ADR-0001](docs/adr/0001-record-architecture-decisions.md) | Record Architecture Decisions | Standardized MADR format, sequential numbering, and centralized index in `docs/adr/README.md`. |
 | [ADR-0002](docs/adr/0002-vite-react-system-design-platform.md) | Vite + React Architecture for System Design Platform | Client-side Vite 6 + React 19 SPA, custom lightweight SVG canvas, and strict separation between `src/data/` blueprints and `src/components/` visualizers. |
 | [ADR-0003](docs/adr/0003-testing-paradigm-and-agentic-verification.md) | Testing Paradigm and Agentic Verification | Compile-time type verification (`tsc --noEmit`), blueprint data schema validation, and Vite build verification for sub-second agentic verification loops. |
+| [ADR-0004](docs/adr/0004-reading-typography.md) | Reading Typography | Long-form text in `<main>` (`p`, `li`, `dd`) uses the reader's chosen font (Inter by default, Newsreader as serif) via `--reading-font`; use `font-mono` or a non-paragraph element for interface labels. |
 
 ---
 

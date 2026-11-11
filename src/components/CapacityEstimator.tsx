@@ -126,7 +126,7 @@ export const CapacityEstimator: React.FC<CapacityEstimatorProps> = ({ estimation
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {[
             { factor: 0.5, label: '0.5x MVP' },
             { factor: 1, label: '1x Baseline' },

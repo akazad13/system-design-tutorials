@@ -13,6 +13,7 @@ See [ADR-0001: Record Architecture Decisions](0001-record-architecture-decisions
 | [ADR-0001](0001-record-architecture-decisions.md) | Record Architecture Decisions | Accepted | 2026-11-07 | Establish ADRs as the standardized mechanism for documenting architectural invariants and technical decisions in `docs/adr/`. |
 | [ADR-0002](0002-vite-react-system-design-platform.md) | Vite + React Architecture for Interactive System Design Platform | Accepted | 2026-11-07 | Adopt a client-side Vite 6 + React 19 + TypeScript + Tailwind CSS v4 architecture with custom SVG canvas and decoupled data schemas in `src/data/`. |
 | [ADR-0003](0003-testing-paradigm-and-agentic-verification.md) | Testing Paradigm and Agentic Verification for Interactive Web Platform | Accepted | 2026-11-07 | Establish compile-time type verification (`tsc --noEmit`), blueprint data schema validation, and Vite build verification for sub-second agentic verification loops. |
+| [ADR-0004](0004-reading-typography.md) | Use Inter for Long-Form Reading Text, with a Reader Serif Option | Accepted | 2026-11-08 | Inter (with disambiguated Il1 and 0/O) for paragraphs and lists in `<main>`, a saved Sans/Serif reader choice (Newsreader), 17px long-form text. |
 
 ---
 
